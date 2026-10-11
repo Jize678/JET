@@ -99,7 +99,7 @@ const CFG = {
   planeR:     6
 };
 
-const BOOST_MULT = 1.6;        // 左Shift 加力倍率（速度、尾焰、引擎声同步强化）
+const BOOST_MULT = 2.0;        // 左Shift 加力倍率（速度、尾焰、引擎声、视野同步强化）
 
 const GUN_KILL_HITS = 10;      // 机枪命中 10 次摧毁建筑
 const BOMB_RADIUS   = 195;     // 炸弹爆炸半径
@@ -231,11 +231,11 @@ const Sound = {
     boost = boost || 0;
     const t = this.ctx.currentTime;
     /* 加力：转速更低沉、滤通更开、共振更强、音量明显更大 */
-    this.engOsc1.frequency.setTargetAtTime(50 + intensity * 42 - boost * 16, t, 0.18);
-    this.engOsc2.frequency.setTargetAtTime(53 + intensity * 44 - boost * 16, t, 0.18);
-    this.engFilter.frequency.setTargetAtTime(290 + intensity * 880 + boost * 1100, t, 0.2);
-    this.engFilter.Q.setTargetAtTime(2.5 + boost * 3.5, t, 0.25);
-    this.engGain.gain.setTargetAtTime((0.06 + intensity * 0.055) * (1 + boost * 1.25), t, 0.25);
+    this.engOsc1.frequency.setTargetAtTime(50 + intensity * 42 - boost * 24, t, 0.18);
+    this.engOsc2.frequency.setTargetAtTime(53 + intensity * 44 - boost * 24, t, 0.18);
+    this.engFilter.frequency.setTargetAtTime(290 + intensity * 880 + boost * 1500, t, 0.2);
+    this.engFilter.Q.setTargetAtTime(2.5 + boost * 4, t, 0.25);
+    this.engGain.gain.setTargetAtTime((0.06 + intensity * 0.055) * (1 + boost * 1.6), t, 0.25);
   },
 
   silenceEngine() {
@@ -741,8 +741,9 @@ function createPlane() {
     color: 0x35597e, shininess: 140, transparent: true, opacity: 0.86
   });
 
-  const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.18, 8, 14), matBody);
+  const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.18, 9.6, 14), matBody);
   fuselage.rotation.x = Math.PI / 2;
+  fuselage.position.z = 0.8;   // 机身向后加长，尾部结构连到喷口
   g.add(fuselage);
 
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.85, 3.1, 14), matBody);
@@ -793,7 +794,7 @@ function createPlane() {
 
   const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 0.92, 0.9, 14), matDark);
   nozzle.rotation.x = Math.PI / 2;
-  nozzle.position.z = 4.4;
+  nozzle.position.z = 5.8;     // 尾喷移到尾翼之后，避免嵌入尾翼
   g.add(nozzle);
 
   const flame = new THREE.Mesh(
@@ -804,7 +805,7 @@ function createPlane() {
     })
   );
   flame.rotation.x = Math.PI / 2;
-  flame.position.z = 5.7;
+  flame.position.z = 7.35;     // 与新喷口位置对应（根部锚定在喷口内）
   g.add(flame);
 
   g.userData.flame = flame;
@@ -1312,6 +1313,18 @@ function updateCamera(dt) {
   camLook.lerp(lookAt, 1 - Math.exp(-11 * dt));
   camera.lookAt(camLook);
 
+  /* 加力：视野拉伸 + 轻微抖动，强化速度感 */
+  const fovT = 62 + G.boost * 14;
+  if (Math.abs(camera.fov - fovT) > 0.02) {
+    camera.fov = fovT;
+    camera.updateProjectionMatrix();
+  }
+  if (G.boost > 0.02) {
+    const bj = G.boost * 0.6;
+    camera.position.x += (Math.random() - 0.5) * bj;
+    camera.position.y += (Math.random() - 0.5) * bj;
+  }
+
   if (G.shake > 0.001) {
     const s = G.shake;
     camera.position.x += (Math.random() - 0.5) * s * 1.6;
@@ -1434,6 +1447,7 @@ function startCrash() {
 
 function updateCrash(dt) {
   G.crashTime += dt;
+  G.boost = Math.max(0, G.boost - dt * 2.5);
 
   plane.position.y -= 95 * dt;
   plane.rotateZ(4.5 * dt);
@@ -1567,7 +1581,7 @@ function update(dt) {
   if (G.crashing) { updateCrash(dt); return; }
 
   /* 加力（左Shift）：平滑升降，供速度 / 尾焰 / 引擎声共用 */
-  G.boost += ((keys.boost ? 1 : 0) - G.boost) * (1 - Math.exp(-7 * dt));
+  G.boost += ((keys.boost ? 1 : 0) - G.boost) * (1 - Math.exp(-9 * dt));
 
   const rollIn  = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
   const pitchIn = (keys.up   ? 1 : 0) - (keys.down  ? 1 : 0);
@@ -1608,12 +1622,15 @@ function update(dt) {
   checkPlaneCollision();
   if (G.crashing) { updateEffects(dt); updateCamera(dt); updateHUD(); return; }
 
-  /* 尾焰（加力时更长、更亮、偏白） */
+  /* 尾焰（加力时向后拉长、更亮、偏白；根部锚定喷口，避免拉长时穿入机身） */
   const flame = plane.userData.flame;
   if (flame) {
     const bs = G.boost;
-    const s = (0.85 + Math.random() * 0.42) * (1 + bs * 1.1);
-    flame.scale.set(s, s, s * (0.85 + Math.random() * 0.55 + bs * 1.5));
+    const sw = (0.85 + Math.random() * 0.42) * (1 + bs * 0.3);   // 宽度
+    const sh = sw * (0.85 + Math.random() * 0.55);               // 高度
+    const kz = sw * (1 + bs * 1.9);                              // 长度（scale.y 对应世界 Z 向）
+    flame.scale.set(sw, kz, sh);
+    flame.position.z = 5.95 + 1.4 * kz;                          // 根部固定在喷口内，只向后延伸
     flame.material.opacity = Math.min(1, 0.45 + Math.random() * 0.45 + bs * 0.4);
     flame.material.color.setRGB(0.5 + bs * 0.42, 0.88 + bs * 0.08, 1);
   }

@@ -1,0 +1,1791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<title>鲸鱼娘的空袭任务</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#8ec5e8;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
+  canvas{display:block;touch-action:none}
+
+  /* 游戏中隐藏鼠标光标（Tab 键切换） */
+  body.hide-cursor,body.hide-cursor *{cursor:none !important}
+  #hud{position:fixed;inset:0;pointer-events:none;color:#fff;
+       text-shadow:0 2px 8px rgba(0,0,0,.65);font-size:13px;letter-spacing:.5px;z-index:5}
+  .hud-row{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;
+           display:flex;justify-content:space-between;padding:0 16px}
+  .hud-item{background:rgba(10,25,45,.35);backdrop-filter:blur(6px);
+            -webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.18);
+            border-radius:12px;padding:6px 12px;display:flex;flex-direction:column;
+            align-items:center;min-width:64px}
+  .hud-item .label{font-size:10px;opacity:.7;letter-spacing:1px}
+  .hud-item .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+
+  #overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+           background:radial-gradient(circle at 50% 40%,rgba(40,90,150,.72),rgba(6,16,32,.92));
+           backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:20px}
+  #overlay.hide{display:none}
+  .panel{width:100%;max-width:380px;text-align:center;color:#eaf4ff;
+         background:rgba(12,28,52,.72);border:1px solid rgba(120,200,255,.3);
+         border-radius:22px;padding:28px 22px;
+         box-shadow:0 20px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.12)}
+  .panel h1{font-size:23px;letter-spacing:2px;margin-bottom:6px;
+            background:linear-gradient(90deg,#8fd6ff,#ffd39b);
+            -webkit-background-clip:text;background-clip:text;color:transparent}
+  .panel .sub{font-size:12px;opacity:.65;margin-bottom:18px;letter-spacing:1px}
+  .panel p{font-size:14px;line-height:1.8;opacity:.9;margin-bottom:16px}
+  .keys{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;font-size:12px}
+  .keys div{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+            border-radius:10px;padding:8px 6px;opacity:.85}
+  .panel button{width:100%;padding:15px;font-size:16px;font-weight:700;letter-spacing:3px;
+    color:#04202f;border:none;border-radius:14px;cursor:pointer;
+    background:linear-gradient(135deg,#7fdcff,#b9f0ff 45%,#ffd9a0);
+    box-shadow:0 8px 26px rgba(110,220,255,.4);transition:transform .1s}
+  .panel button:active{transform:scale(.97)}
+  .bigscore{font-size:38px;font-weight:800;color:#ffd98a;margin:6px 0 16px;
+            font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="hud-row">
+    <div class="hud-item"><span class="label">得分</span><span class="val" id="hudScore">0</span></div>
+    <div class="hud-item"><span class="label">击毁建筑</span><span class="val" id="hudDestroyed">0</span></div>
+    <div class="hud-item"><span class="label">高度</span><span class="val" id="hudAlt">0</span></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="panel" id="panel">
+    <h1>鲸鱼娘的空袭任务</h1>
+    <div class="sub">CETACEA AIR STRIKE</div>
+    <p>自由飞行、机炮扫射、投弹轰炸。撞到建筑或地面就会坠毁。</p>
+    <div class="keys">
+      <div>W / S 俯仰升降</div>
+      <div>A / D 横滚转向</div>
+      <div>鼠标左键 按住扫射</div>
+      <div>右键 按住瞄准 · 松开投弹</div>
+      <div>滑动鼠标 拖动视角</div>
+      <div>Alt 视角回正 · 左Shift 加力</div>
+      <div style="grid-column:1/-1">Tab 显示 / 隐藏鼠标（进入任务自动隐藏）</div>
+    </div>
+    <button id="startBtn">开始任务</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+(function () {
+'use strict';
+
+/* =========================================================
+   配置
+========================================================= */
+const CFG = {
+  speed:      68,
+  rollRate:   1.9,
+  pitchRate:  1.35,
+  yawRate:    0.75,
+  gravity:    48,
+  bombCD:     0.6,
+  fireCD:     0.085,
+  bulletSpd:  560,
+  mapHalf:    1850,
+  ceil:       1500,
+  planeR:     6
+};
+
+const BOOST_MULT = 1.6;        // 左Shift 加力倍率（速度、尾焰、引擎声同步强化）
+
+const GUN_KILL_HITS = 10;      // 机枪命中 10 次摧毁建筑
+const BOMB_RADIUS   = 195;     // 炸弹爆炸半径
+
+const WATER_LEVEL = 4;
+
+const G = {
+  started:false, over:false, crashing:false, crashTime:0,
+  score:0, destroyed:0, fireTimer:0, shake:0, bulletSide:1,
+  aiming:false, boost:0, cursorHidden:false
+};
+
+const keys = { left:false, right:false, up:false, down:false, fire:false, boost:false };
+
+let scene, camera, renderer, clock;
+let plane, aimRing, gunReticle;
+const bombs = [], bullets = [], effects = [], buildings = [];
+let camInit = false;
+const camLook = new THREE.Vector3();
+const overlay = document.getElementById('overlay');
+
+/* ---- 视角偏移（由鼠标拖动控制） ---- */
+let camYawOff = 0, camPitchOff = 0;
+const CAM_YAW_MAX = 1.35;
+const CAM_PITCH_MIN = -0.85;
+const CAM_PITCH_MAX = 1.05;
+const MOUSE_SENS = 0.0042;          // 鼠标拖动视角灵敏度 rad/px
+
+/* ---- 鼠标状态 ---- */
+let mousePX = null, mousePY = null; // 上一次鼠标位置
+
+const _tmpEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const _tmpQuat  = new THREE.Quaternion();
+const _tmpVec   = new THREE.Vector3();
+
+/* =========================================================
+   共享几何 / 材质
+========================================================= */
+const UNIT_BOX   = new THREE.BoxGeometry(1, 1, 1);
+const FX_BALL    = new THREE.SphereGeometry(1, 12, 10);
+const FX_SPARK   = new THREE.BoxGeometry(1, 1, 1);
+const SMOKE_GEO  = new THREE.SphereGeometry(1, 8, 6);
+const FX_RING    = (function () {
+  const g = new THREE.RingGeometry(0.82, 1.0, 36);
+  g.rotateX(-Math.PI / 2);
+  return g;
+})();
+const BULLET_GEO = (function () {
+  const g = new THREE.CylinderGeometry(0.18, 0.18, 5, 6);
+  g.rotateX(Math.PI / 2);
+  return g;
+})();
+const BULLET_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffe066, transparent: true, opacity: 0.92,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+const DEBRIS_MATS = new Map();
+function getDebrisMat(hex) {
+  let m = DEBRIS_MATS.get(hex);
+  if (!m) { m = new THREE.MeshLambertMaterial({ color: hex }); DEBRIS_MATS.set(hex, m); }
+  return m;
+}
+
+/* =========================================================
+   音效
+========================================================= */
+const Sound = {
+  ctx:null, master:null, ready:false,
+  engOsc1:null, engOsc2:null, engGain:null, engFilter:null, noiseBuf:null,
+  lastGun:0,
+
+  init() {
+    if (this.ready) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try { this.ctx = new AC(); } catch (e) { return; }
+    const ctx = this.ctx;
+
+    this.master = ctx.createGain();
+    this.master.gain.value = 0.55;
+    this.master.connect(ctx.destination);
+
+    const sr = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, sr * 2, sr);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    this.noiseBuf = buf;
+
+    this.engOsc1 = ctx.createOscillator();
+    this.engOsc1.type = 'sawtooth';
+    this.engOsc1.frequency.value = 58;
+
+    this.engOsc2 = ctx.createOscillator();
+    this.engOsc2.type = 'sawtooth';
+    this.engOsc2.frequency.value = 61.5;
+
+    const engNoise = ctx.createBufferSource();
+    engNoise.buffer = buf;
+    engNoise.loop = true;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.3;
+
+    this.engFilter = ctx.createBiquadFilter();
+    this.engFilter.type = 'lowpass';
+    this.engFilter.frequency.value = 380;
+    this.engFilter.Q.value = 2.5;
+
+    this.engGain = ctx.createGain();
+    this.engGain.gain.value = 0;
+
+    this.engOsc1.connect(this.engFilter);
+    this.engOsc2.connect(this.engFilter);
+    engNoise.connect(noiseGain);
+    noiseGain.connect(this.engFilter);
+    this.engFilter.connect(this.engGain);
+    this.engGain.connect(this.master);
+
+    this.engOsc1.start();
+    this.engOsc2.start();
+    engNoise.start();
+
+    this.engGain.gain.setTargetAtTime(0.085, ctx.currentTime, 0.6);
+    this.ready = true;
+  },
+
+  setEngine(intensity, boost) {
+    if (!this.ready) return;
+    boost = boost || 0;
+    const t = this.ctx.currentTime;
+    /* 加力：转速更低沉、滤通更开、共振更强、音量明显更大 */
+    this.engOsc1.frequency.setTargetAtTime(50 + intensity * 42 - boost * 16, t, 0.18);
+    this.engOsc2.frequency.setTargetAtTime(53 + intensity * 44 - boost * 16, t, 0.18);
+    this.engFilter.frequency.setTargetAtTime(290 + intensity * 880 + boost * 1100, t, 0.2);
+    this.engFilter.Q.setTargetAtTime(2.5 + boost * 3.5, t, 0.25);
+    this.engGain.gain.setTargetAtTime((0.06 + intensity * 0.055) * (1 + boost * 1.25), t, 0.25);
+  },
+
+  silenceEngine() {
+    if (!this.ready) return;
+    this.engGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+  },
+
+  gun() {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (t - this.lastGun < 0.028) return;
+    this.lastGun = t;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = 1.5 + Math.random() * 0.4;
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1500 + Math.random() * 600;
+    bp.Q.value = 1.3;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.20, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 0.085);
+  },
+
+  boom(power) {
+    if (!this.ready) return;
+    power = power || 1;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const dur = 0.5 + power * 0.65;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = 0.5 + Math.random() * 0.3;
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(2400 * power, t);
+    lp.frequency.exponentialRampToValueAtTime(100, t + dur);
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.34 * Math.min(1.7, power), t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + dur + 0.15);
+  }
+};
+
+/* =========================================================
+   工具
+========================================================= */
+function smoothstep(e0, e1, x) {
+  let t = (x - e0) / (e1 - e0);
+  t = Math.min(1, Math.max(0, t));
+  return t * t * (3 - 2 * t);
+}
+
+/* =========================================================
+   地形
+========================================================= */
+function terrainHeight(x, z) {
+  let h = 70;
+  h += Math.sin(x * 0.0015) * Math.cos(z * 0.0012) * 30;
+  h += Math.sin(x * 0.0038 + 1.7) * 13;
+  h += Math.cos(z * 0.0031 - 0.9) * 15;
+  h += Math.sin((x + z) * 0.0006) * 22;
+
+  const mdx = (x + 1250) / 900;
+  const mdz = (z + 950) / 820;
+  const md = Math.hypot(mdx, mdz);
+  const mtnMask = Math.max(0, 1 - md);
+  const mm = mtnMask * mtnMask * (1 - mtnMask * 0.25);
+  h += mm * 620;
+  h += Math.sin(x * 0.0052 + 0.5) * Math.cos(z * 0.0046 - 1.2) * mm * 210;
+  h += Math.sin(x * 0.011 + 2.1) * Math.cos(z * 0.0098) * mm * 60;
+
+  const cdx = (x - 700) / 640, cdz = (z - 40) / 620;
+  const cd = Math.hypot(cdx, cdz);
+  if (cd < 1.4) {
+    const w = smoothstep(1.4, 0.82, cd);
+    h = h * (1 - w) + 50 * w;
+  }
+
+  const rc = Math.sin(z * 0.0021) * 300 + Math.sin(z * 0.00075) * 220 - 120;
+  const rd = Math.abs(x - rc);
+  const rw = 52 + Math.sin(z * 0.009) * 10;
+  if (rd < rw * 2.9) {
+    const t = smoothstep(rw * 2.9, rw * 0.75, rd);
+    h = h * (1 - t) + (-24 + Math.sin(z * 0.008) * 4) * t;
+  }
+
+  const ldx = x + 620, ldz = z - 700;
+  const ld = Math.hypot(ldx, ldz);
+  const ang = Math.atan2(ldz, ldx);
+  const lr = 305 + Math.sin(ang * 3) * 48 + Math.sin(ang * 5 + 1.2) * 26;
+  if (ld < lr * 1.75) {
+    const t = smoothstep(lr * 1.75, lr * 0.55, ld);
+    h = h * (1 - t) + (-20 + Math.sin(ang * 4) * 3) * t;
+  }
+
+  return h;
+}
+
+const STOPS = [
+  { h: -30, c: [0.19, 0.25, 0.17] },
+  { h:  2,  c: [0.42, 0.40, 0.27] },
+  { h: 12,  c: [0.56, 0.50, 0.34] },
+  { h: 22,  c: [0.35, 0.49, 0.24] },
+  { h: 120, c: [0.28, 0.46, 0.22] },
+  { h: 215, c: [0.19, 0.35, 0.17] },
+  { h: 300, c: [0.31, 0.29, 0.26] },
+  { h: 400, c: [0.46, 0.44, 0.43] },
+  { h: 520, c: [0.90, 0.93, 0.97] },
+  { h: 720, c: [1.00, 1.00, 1.00] }
+];
+
+function terrainColor(h, out) {
+  if (h <= STOPS[0].h) {
+    out[0] = STOPS[0].c[0]; out[1] = STOPS[0].c[1]; out[2] = STOPS[0].c[2];
+    return;
+  }
+  for (let i = 0; i < STOPS.length - 1; i++) {
+    const a = STOPS[i], b = STOPS[i + 1];
+    if (h >= a.h && h <= b.h) {
+      const t = smoothstep(a.h, b.h, h);
+      out[0] = a.c[0] + (b.c[0] - a.c[0]) * t;
+      out[1] = a.c[1] + (b.c[1] - a.c[1]) * t;
+      out[2] = a.c[2] + (b.c[2] - a.c[2]) * t;
+      return;
+    }
+  }
+  const L = STOPS[STOPS.length - 1].c;
+  out[0] = L[0]; out[1] = L[1]; out[2] = L[2];
+}
+
+function createTerrain() {
+  const SIZE = 4400, SEG = 200;
+  const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+  geo.rotateX(-Math.PI / 2);
+
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const tmp = [0, 0, 0];
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const h = terrainHeight(x, z);
+    pos.setY(i, h);
+    terrainColor(h, tmp);
+
+    const cdx = (x - 700) / 640, cdz = (z - 40) / 620;
+    if (Math.hypot(cdx, cdz) < 1.15) {
+      const w = smoothstep(1.15, 0.82, Math.hypot(cdx, cdz)) * 0.68;
+      tmp[0] = tmp[0] * (1 - w) + 0.40 * w;
+      tmp[1] = tmp[1] * (1 - w) + 0.41 * w;
+      tmp[2] = tmp[2] * (1 - w) + 0.42 * w;
+    }
+
+    const n = (Math.sin(x * 0.31 + z * 0.27) * 0.5 + 0.5) * 0.06 - 0.03;
+    colors[i * 3]     = Math.min(1, Math.max(0, tmp[0] + n));
+    colors[i * 3 + 1] = Math.min(1, Math.max(0, tmp[1] + n));
+    colors[i * 3 + 2] = Math.min(1, Math.max(0, tmp[2] + n));
+  }
+
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
+}
+
+function createWater() {
+  const geo = new THREE.PlaneGeometry(7000, 7000);
+  geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshPhongMaterial({
+    color: 0x2f6f9e, transparent: true, opacity: 0.82,
+    shininess: 110, specular: 0x88ccff, depthWrite: false
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = WATER_LEVEL;
+  mesh.renderOrder = 1;
+  scene.add(mesh);
+}
+
+function createSky() {
+  const geo = new THREE.SphereGeometry(7000, 24, 16);
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: {
+      topColor:    { value: new THREE.Color(0x1e5fa8) },
+      midColor:    { value: new THREE.Color(0x76b0dd) },
+      bottomColor: { value: new THREE.Color(0xd6e7f2) }
+    },
+    vertexShader: `
+      varying vec3 vPos;
+      void main(){ vPos = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform vec3 topColor; uniform vec3 midColor; uniform vec3 bottomColor;
+      varying vec3 vPos;
+      void main(){
+        float h = vPos.y;
+        vec3 c = mix(bottomColor, midColor, smoothstep(-0.12, 0.28, h));
+        c = mix(c, topColor, smoothstep(0.22, 0.78, h));
+        gl_FragColor = vec4(c, 1.0); }`
+  });
+  scene.add(new THREE.Mesh(geo, mat));
+}
+
+function createClouds() {
+  const mat = new THREE.MeshLambertMaterial({
+    color: 0xffffff, transparent: true, opacity: 0.78, depthWrite: false
+  });
+  const geo = new THREE.SphereGeometry(1, 8, 6);
+  for (let i = 0; i < 30; i++) {
+    const cl = new THREE.Group();
+    const n = 3 + (Math.random() * 5 | 0);
+    for (let j = 0; j < n; j++) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set((Math.random()-0.5)*90, (Math.random()-0.5)*14, (Math.random()-0.5)*90);
+      m.scale.set(26 + Math.random()*38, 11 + Math.random()*15, 26 + Math.random()*38);
+      cl.add(m);
+    }
+    cl.position.set((Math.random()-0.5)*4000, 400 + Math.random()*560, (Math.random()-0.5)*4000);
+    cl.renderOrder = 2;
+    scene.add(cl);
+  }
+}
+
+function createVegetation() {
+  const COUNT = 460;
+  const trunkGeo = new THREE.CylinderGeometry(0.5, 0.85, 6, 5);
+  trunkGeo.translate(0, 3, 0);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a3524 });
+  const leafGeo = new THREE.ConeGeometry(3.4, 13, 7);
+  leafGeo.translate(0, 10.5, 0);
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x2c5c28 });
+
+  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, COUNT);
+  const leaves = new THREE.InstancedMesh(leafGeo, leafMat, COUNT);
+  const dummy = new THREE.Object3D();
+  let placed = 0, tries = 0;
+
+  while (placed < COUNT && tries < COUNT * 16) {
+    tries++;
+    const x = (Math.random()-0.5) * 4100;
+    const z = (Math.random()-0.5) * 4100;
+    const h = terrainHeight(x, z);
+    if (h < 80 || h > 320) continue;
+    const cdx = (x - 700) / 640, cdz = (z - 40) / 620;
+    if (Math.hypot(cdx, cdz) < 1.25) continue;
+    if (h < WATER_LEVEL + 6) continue;
+
+    const s = 0.65 + Math.random() * 1.05;
+    dummy.position.set(x, h, z);
+    dummy.rotation.y = Math.random() * Math.PI * 2;
+    dummy.scale.set(s, s * (0.75 + Math.random() * 0.65), s);
+    dummy.updateMatrix();
+    trunks.setMatrixAt(placed, dummy.matrix);
+    leaves.setMatrixAt(placed, dummy.matrix);
+    placed++;
+  }
+  trunks.count = leaves.count = placed;
+  trunks.instanceMatrix.needsUpdate = true;
+  leaves.instanceMatrix.needsUpdate = true;
+  scene.add(trunks);
+  scene.add(leaves);
+}
+
+/* =========================================================
+   空间哈希
+========================================================= */
+const HASH_CELL = 110;
+const bHash = new Map();
+let queryFrame = 0;
+const _qResult = [];
+
+function addToHash(b) {
+  const key = Math.floor(b.x / HASH_CELL) + ',' + Math.floor(b.z / HASH_CELL);
+  let arr = bHash.get(key);
+  if (!arr) { arr = []; bHash.set(key, arr); }
+  arr.push(b);
+  b._hashKey = key;
+}
+function removeFromHash(b) {
+  const arr = bHash.get(b._hashKey);
+  if (!arr) return;
+  const i = arr.indexOf(b);
+  if (i >= 0) arr.splice(i, 1);
+}
+function queryBuildings(x, z, radius) {
+  queryFrame++;
+  _qResult.length = 0;
+  const minGx = Math.floor((x - radius) / HASH_CELL);
+  const maxGx = Math.floor((x + radius) / HASH_CELL);
+  const minGz = Math.floor((z - radius) / HASH_CELL);
+  const maxGz = Math.floor((z + radius) / HASH_CELL);
+  for (let gx = minGx; gx <= maxGx; gx++) {
+    for (let gz = minGz; gz <= maxGz; gz++) {
+      const arr = bHash.get(gx + ',' + gz);
+      if (!arr) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const b = arr[i];
+        if (b._qf === queryFrame || b.dead) continue;
+        b._qf = queryFrame;
+        _qResult.push(b);
+      }
+    }
+  }
+  return _qResult;
+}
+
+/* =========================================================
+   城市
+========================================================= */
+function createCity() {
+  const CX = 700, CZ = 40, RX = 620, RZ = 600;
+  const BS = 118, ROAD = 24;
+  const plot = BS - ROAD;
+
+  const bodyColors = [
+    0x6d8fc4, 0x7ba0cf, 0x5d7fb5, 0x88aad6, 0x6385b8,
+    0x7a94b8, 0x8fb0d4, 0x5a78a8, 0x96b8dc, 0x6b8cba
+  ];
+  const roofColors = [0xe8956a, 0xf0a868, 0xd97a5c, 0xf5c88a, 0xc96b52];
+
+  const bodyMats = bodyColors.map(c => new THREE.MeshLambertMaterial({ color: c }));
+  const roofMats = roofColors.map(c => new THREE.MeshLambertMaterial({ color: c }));
+
+  for (let bx = -RX; bx < RX - BS; bx += BS) {
+    for (let bz = -RZ; bz < RZ - BS; bz += BS) {
+      const ccx = bx + BS / 2, ccz = bz + BS / 2;
+      const d = Math.hypot(ccx / RX, ccz / RZ);
+      if (d > 0.92) continue;
+      if (d > 0.6 && Math.random() < 0.38) continue;
+
+      const core = Math.max(0, 1 - d / 0.92);
+
+      const plots = [];
+      if (Math.random() < 0.55) {
+        const cell = plot / 2;
+        for (let i = 0; i < 2; i++) {
+          for (let j = 0; j < 2; j++) {
+            if (Math.random() < 0.22) continue;
+            plots.push({
+              x: bx + ROAD / 2 + (i + 0.5) * cell,
+              z: bz + ROAD / 2 + (j + 0.5) * cell,
+              w: cell * 0.80, d: cell * 0.80
+            });
+          }
+        }
+      } else {
+        if (Math.random() < 0.5) {
+          plots.push({ x: bx + BS / 2, z: bz + BS / 2, w: plot * 0.86, d: plot * 0.86 });
+        } else {
+          for (let j = 0; j < 2; j++) {
+            plots.push({
+              x: bx + BS / 2,
+              z: bz + ROAD / 2 + (j + 0.5) * (plot / 2),
+              w: plot * 0.80, d: plot * 0.38
+            });
+          }
+        }
+      }
+
+      for (const p of plots) {
+        const wx = CX + p.x, wz = CZ + p.z;
+        const gh = terrainHeight(wx, wz);
+        if (gh < WATER_LEVEL + 8) continue;
+
+        const hMax = 35 + core * 300;
+        const h = 24 + Math.pow(Math.random(), 1.5) * hMax;
+        const w  = p.w * (0.75 + Math.random() * 0.25);
+        const dd = p.d * (0.75 + Math.random() * 0.25);
+
+        makeBuilding(wx, wz, gh, w, h, dd, bodyMats, roofMats);
+      }
+    }
+  }
+}
+
+function makeBuilding(x, z, y, w, h, d, bodyMats, roofMats) {
+  const bodyMat = bodyMats[(Math.random() * bodyMats.length) | 0];
+  const roofMat = roofMats[(Math.random() * roofMats.length) | 0];
+
+  const rotY = (Math.random() - 0.5) * 0.16;
+
+  const body = new THREE.Mesh(UNIT_BOX, bodyMat);
+  body.position.set(x, y + h / 2, z);
+  body.scale.set(w, h, d);
+  body.rotation.y = rotY;
+  scene.add(body);
+
+  const roofH = 2.6 + h * 0.028;
+  const roof = new THREE.Mesh(UNIT_BOX, roofMat);
+  roof.position.set(x, y + h + roofH / 2 - 0.3, z);
+  roof.scale.set(w * 1.07, roofH, d * 1.07);
+  roof.rotation.y = rotY;
+  scene.add(roof);
+
+  const b = {
+    body, roof,
+    x, z,
+    y0: y,
+    y1: y + h + roofH,
+    hw: (w * 1.07) / 2,
+    hd: (d * 1.07) / 2,
+    w, h, d,
+    colorHex: bodyMat.color.getHex(),
+    gunHits: 0,
+    dead: false,
+    _qf: -1
+  };
+  buildings.push(b);
+  addToHash(b);
+}
+
+function sphereHitsBuilding(px, py, pz, r, b) {
+  const cx = Math.max(b.x - b.hw, Math.min(px, b.x + b.hw));
+  const cy = Math.max(b.y0, Math.min(py, b.y1));
+  const cz = Math.max(b.z - b.hd, Math.min(pz, b.z + b.hd));
+  const dx = px - cx, dy = py - cy, dz = pz - cz;
+  return dx * dx + dy * dy + dz * dz < r * r;
+}
+
+function hitByBullet(b, hitPos) {
+  if (b.dead) return;
+  b.gunHits++;
+  if (b.gunHits >= GUN_KILL_HITS) {
+    destroyBuilding(b);
+  } else {
+    spawnHitSpark(hitPos);
+  }
+}
+
+function destroyBuilding(b) {
+  if (b.dead) return;
+  b.dead = true;
+
+  scene.remove(b.body);
+  scene.remove(b.roof);
+  removeFromHash(b);
+
+  const n = 6 + (Math.random() * 6 | 0);
+  for (let i = 0; i < n; i++) spawnDebris(b);
+
+  const center = new THREE.Vector3(b.x, b.y0 + b.h * 0.5, b.z);
+  spawnExplosion(center, 1.6 + Math.min(1.8, b.h / 170));
+  Sound.boom(0.7 + Math.min(1.0, b.h / 260));
+
+  G.shake = Math.min(1.6, G.shake + 0.45);
+  G.destroyed++;
+  G.score += 10;
+}
+
+function spawnDebris(b) {
+  const s = 2 + Math.random() * 5;
+  const m = new THREE.Mesh(UNIT_BOX, getDebrisMat(b.colorHex));
+  m.scale.set(s, s * (0.6 + Math.random() * 0.9), s);
+  m.position.set(
+    b.x + (Math.random() - 0.5) * b.w,
+    b.y0 + Math.random() * b.h,
+    b.z + (Math.random() - 0.5) * b.d
+  );
+  scene.add(m);
+
+  const dir = new THREE.Vector3(
+    m.position.x - b.x,
+    Math.random() * 0.8 + 0.2,
+    m.position.z - b.z
+  ).normalize();
+
+  const spd = 18 + Math.random() * 35;
+  const vel = dir.multiplyScalar(spd);
+  vel.y += 18 + Math.random() * 24;
+
+  effects.push({
+    type: 'debris', mesh: m,
+    ownsGeo: false, ownsMat: false,
+    life: 0, dur: 2.2 + Math.random() * 1.5,
+    vel,
+    angVel: new THREE.Vector3(
+      (Math.random() - 0.5) * 12,
+      (Math.random() - 0.5) * 12,
+      (Math.random() - 0.5) * 12
+    )
+  });
+}
+
+/* =========================================================
+   战斗机
+========================================================= */
+function createPlane() {
+  const g = new THREE.Group();
+  const matBody  = new THREE.MeshLambertMaterial({ color: 0xc2d0de });
+  const matDark  = new THREE.MeshLambertMaterial({ color: 0x36434f });
+  const matRed   = new THREE.MeshLambertMaterial({ color: 0xe8453c });
+  const matGlass = new THREE.MeshPhongMaterial({
+    color: 0x35597e, shininess: 140, transparent: true, opacity: 0.86
+  });
+
+  const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.18, 8, 14), matBody);
+  fuselage.rotation.x = Math.PI / 2;
+  g.add(fuselage);
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.85, 3.1, 14), matBody);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -5.5;
+  g.add(nose);
+
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(13.2, 0.34, 3.3), matBody);
+  wing.position.set(0, -0.28, 0.5);
+  g.add(wing);
+
+  [-4.6, 4.6].forEach(x => {
+    const sweep = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.3, 2.0), matBody);
+    sweep.position.set(x, -0.28, -0.9);
+    sweep.rotation.y = x > 0 ? -0.42 : 0.42;
+    g.add(sweep);
+  });
+
+  [-6.3, 6.3].forEach(x => {
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.42, 3.3), matRed);
+    tip.position.set(x, -0.28, 0.5);
+    g.add(tip);
+  });
+
+  [-3.2, 3.2].forEach(x => {
+    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 2.0, 8), matDark);
+    pod.rotation.x = Math.PI / 2;
+    pod.position.set(x, -0.55, -1.4);
+    g.add(pod);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.4, 6), matDark);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(x, -0.55, -3.0);
+    g.add(barrel);
+  });
+
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.92, 14, 10), matGlass);
+  canopy.scale.set(1, 0.74, 2.05);
+  canopy.position.set(0, 0.84, -1.9);
+  g.add(canopy);
+
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.8, 2.3), matRed);
+  fin.position.set(0, 1.65, 4.0);
+  g.add(fin);
+
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.3, 1.8), matBody);
+  tail.position.set(0, 0.1, 4.3);
+  g.add(tail);
+
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 0.92, 0.9, 14), matDark);
+  nozzle.rotation.x = Math.PI / 2;
+  nozzle.position.z = 4.4;
+  g.add(nozzle);
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.82, 2.8, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0x7fe0ff, transparent: true, opacity: 0.8,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  flame.rotation.x = Math.PI / 2;
+  flame.position.z = 5.7;
+  g.add(flame);
+
+  g.userData.flame = flame;
+  g.scale.setScalar(1.55);
+  return g;
+}
+
+/* =========================================================
+   炸弹
+========================================================= */
+let BOMB_PROTO = null;
+function makeBombProto() {
+  const g = new THREE.Group();
+  const matBody = new THREE.MeshLambertMaterial({ color: 0x5a6150 });
+  const matDark = new THREE.MeshLambertMaterial({ color: 0x2b2f28 });
+  const matRed  = new THREE.MeshLambertMaterial({ color: 0x9a3525 });
+
+  const bodyGeo = new THREE.CylinderGeometry(0.5, 0.5, 2.3, 10);
+  bodyGeo.rotateX(Math.PI / 2);
+  const body = new THREE.Mesh(bodyGeo, matBody);
+  g.add(body);
+
+  const noseGeo = new THREE.ConeGeometry(0.5, 1.4, 10);
+  noseGeo.rotateX(-Math.PI / 2);
+  const nose = new THREE.Mesh(noseGeo, matDark);
+  nose.position.z = -1.8;
+  g.add(nose);
+
+  const bandGeo = new THREE.CylinderGeometry(0.53, 0.53, 0.3, 10);
+  bandGeo.rotateX(Math.PI / 2);
+  const band = new THREE.Mesh(bandGeo, matRed);
+  band.position.z = -0.4;
+  g.add(band);
+
+  const finGeo = new THREE.BoxGeometry(0.08, 0.85, 1.0);
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2;
+    const fin = new THREE.Mesh(finGeo, matDark);
+    fin.position.set(Math.cos(a) * 0.62, Math.sin(a) * 0.62, 1.4);
+    fin.rotation.z = a;
+    g.add(fin);
+  }
+
+  g.scale.setScalar(1.65);
+  return g;
+}
+
+function dropBomb(forward) {
+  const m = BOMB_PROTO.clone();
+  m.position.copy(plane.position).addScaledVector(forward, 13);
+  m.position.y -= 4;
+  scene.add(m);
+
+  const vel = forward.clone().multiplyScalar(curSpeed());
+  vel.y -= 8;
+
+  bombs.push({ mesh: m, vel: vel, age: 0, trail: 0 });
+}
+
+function onBombImpact(pos) {
+  spawnExplosion(pos, 3.6);
+  Sound.boom(1.6);
+  G.shake = Math.min(2.4, G.shake + 1.0);
+
+  const R = BOMB_RADIUS;
+  const nearby = queryBuildings(pos.x, pos.z, R + 160);
+  for (let i = 0; i < nearby.length; i++) {
+    const b = nearby[i];
+    if (b.dead) continue;
+    const dx = b.x - pos.x, dz = b.z - pos.z;
+    if (Math.abs(dx) < R + b.hw && Math.abs(dz) < R + b.hd) {
+      const dy = Math.abs((b.y0 + b.h * 0.5) - pos.y);
+      if (dy < R + b.h * 0.5) {
+        destroyBuilding(b);
+      }
+    }
+  }
+}
+
+/* =========================================================
+   机炮
+========================================================= */
+function fireBullet() {
+  const fwd = getForward().clone();
+  const side = new THREE.Vector3(1, 0, 0).applyQuaternion(plane.quaternion);
+  const up   = new THREE.Vector3(0, 1, 0).applyQuaternion(plane.quaternion);
+
+  G.bulletSide = -G.bulletSide;
+
+  const pos = plane.position.clone()
+    .addScaledVector(fwd, 13)
+    .addScaledVector(side, G.bulletSide * 2.6)
+    .addScaledVector(up, -0.9);
+
+  const m = new THREE.Mesh(BULLET_GEO, BULLET_MAT);
+  m.position.copy(pos);
+  m.quaternion.copy(plane.quaternion);
+  scene.add(m);
+
+  const vel = fwd.clone().multiplyScalar(CFG.bulletSpd).addScaledVector(side, G.bulletSide * 0.5);
+
+  bullets.push({ mesh: m, vel: vel, age: 0 });
+
+  spawnMuzzleFlash(pos);
+  Sound.gun();
+}
+
+function spawnMuzzleFlash(pos) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xfff0a0, transparent: true, opacity: 0.95,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const m = new THREE.Mesh(FX_BALL, mat);
+  m.position.copy(pos);
+  m.scale.setScalar(1.6);
+  scene.add(m);
+  effects.push({
+    type: 'ball', mesh: m, ownsGeo: false, ownsMat: true,
+    life: 0, dur: 0.07, base: 1.6
+  });
+}
+
+function updateBullets(dt) {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const bu = bullets[i];
+    bu.age += dt;
+
+    const stepLen = bu.vel.length() * dt;
+    const steps = Math.max(1, Math.ceil(stepLen / 6));
+    let removed = false;
+
+    for (let s = 0; s < steps; s++) {
+      bu.mesh.position.addScaledVector(bu.vel, dt / steps);
+
+      const p = bu.mesh.position;
+      const gh = terrainHeight(p.x, p.z);
+      if (p.y < gh) {
+        spawnHitSpark(p);
+        scene.remove(bu.mesh);
+        bullets.splice(i, 1);
+        removed = true;
+        break;
+      }
+
+      const nearby = queryBuildings(p.x, p.z, 30);
+      for (let j = 0; j < nearby.length; j++) {
+        const b = nearby[j];
+        if (b.dead) continue;
+        if (p.x > b.x - b.hw && p.x < b.x + b.hw &&
+            p.z > b.z - b.hd && p.z < b.z + b.hd &&
+            p.y > b.y0 && p.y < b.y1) {
+          hitByBullet(b, p.clone());
+          scene.remove(bu.mesh);
+          bullets.splice(i, 1);
+          removed = true;
+          break;
+        }
+      }
+      if (removed) break;
+    }
+
+    if (removed) continue;
+
+    if (bu.age > 2.2) {
+      scene.remove(bu.mesh);
+      bullets.splice(i, 1);
+    }
+  }
+}
+
+/* =========================================================
+   特效
+========================================================= */
+function spawnHitSpark(pos) {
+  for (let i = 0; i < 5; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffdd66, transparent: true, opacity: 1,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const p = new THREE.Mesh(FX_SPARK, mat);
+    p.position.copy(pos);
+    p.scale.setScalar(0.5 + Math.random() * 0.6);
+    scene.add(p);
+    effects.push({
+      type: 'spark', mesh: p, ownsGeo: false, ownsMat: true,
+      life: 0, dur: 0.22 + Math.random() * 0.2,
+      vel: new THREE.Vector3(
+        (Math.random() - 0.5) * 45,
+        Math.random() * 28 + 5,
+        (Math.random() - 0.5) * 45
+      )
+    });
+  }
+}
+
+function spawnSmoke(pos, scale, dark) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: dark ? 0x3a3a3a : 0x9a9a9a,
+    transparent: true, opacity: 0.55, depthWrite: false
+  });
+  const m = new THREE.Mesh(SMOKE_GEO, mat);
+  m.position.copy(pos);
+  m.scale.setScalar(scale * (0.8 + Math.random() * 0.4));
+  scene.add(m);
+  effects.push({
+    type: 'smoke', mesh: m, ownsGeo: false, ownsMat: true,
+    life: 0, dur: 0.85 + Math.random() * 0.7, base: scale,
+    vel: new THREE.Vector3(
+      (Math.random() - 0.5) * 8,
+      6 + Math.random() * 12,
+      (Math.random() - 0.5) * 8
+    )
+  });
+}
+
+function spawnExplosion(pos, scale) {
+  scale = scale || 1;
+
+  const flash = new THREE.Mesh(FX_BALL, new THREE.MeshBasicMaterial({
+    color: 0xffffff, transparent: true, opacity: 1,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  }));
+  flash.position.copy(pos);
+  flash.scale.setScalar(2.5 * scale);
+  scene.add(flash);
+  effects.push({ type:'flash', mesh:flash, ownsGeo:false, ownsMat:true, life:0, dur:0.18, base:2.5*scale });
+
+  const ball = new THREE.Mesh(FX_BALL, new THREE.MeshBasicMaterial({
+    color: 0xffcc44, transparent: true, opacity: 1,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  }));
+  ball.position.copy(pos);
+  ball.scale.setScalar(4.2 * scale);
+  scene.add(ball);
+  effects.push({ type:'ball', mesh:ball, ownsGeo:false, ownsMat:true, life:0, dur:0.72, base:4.2*scale });
+
+  const ring = new THREE.Mesh(FX_RING, new THREE.MeshBasicMaterial({
+    color: 0xfff0c0, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+  }));
+  ring.position.copy(pos);
+  ring.position.y += 1;
+  ring.scale.setScalar(3.4 * scale);
+  scene.add(ring);
+  effects.push({ type:'ring', mesh:ring, ownsGeo:false, ownsMat:true, life:0, dur:0.58, base:3.4*scale });
+
+  const n = 18 + (Math.random() * 12 | 0);
+  for (let i = 0; i < n; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: Math.random() < 0.55 ? 0xffdd66 : 0xff5a22,
+      transparent: true, opacity: 1,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const p = new THREE.Mesh(FX_SPARK, mat);
+    p.position.copy(pos);
+    p.scale.setScalar((0.8 + Math.random() * 1.8) * scale);
+    scene.add(p);
+
+    const dir = new THREE.Vector3(
+      Math.random() - 0.5,
+      Math.random() * 1.1 + 0.05,
+      Math.random() - 0.5
+    ).normalize();
+
+    effects.push({
+      type:'spark', mesh:p, ownsGeo:false, ownsMat:true, life:0,
+      dur: 0.65 + Math.random() * 0.7,
+      vel: dir.multiplyScalar((32 + Math.random() * 62) * scale)
+    });
+  }
+
+  const sn = 6 + (Math.random() * 5 | 0);
+  for (let i = 0; i < sn; i++) {
+    const off = new THREE.Vector3(
+      (Math.random() - 0.5) * 14 * scale,
+      Math.random() * 14 * scale,
+      (Math.random() - 0.5) * 14 * scale
+    );
+    spawnSmoke(pos.clone().add(off), (6 + Math.random() * 8) * scale, true);
+  }
+}
+
+function updateEffects(dt) {
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const e = effects[i];
+    e.life += dt;
+    const t = e.life / e.dur;
+
+    if (t >= 1) {
+      scene.remove(e.mesh);
+      if (e.ownsMat && e.mesh.material) e.mesh.material.dispose();
+      if (e.ownsGeo && e.mesh.geometry) e.mesh.geometry.dispose();
+      effects.splice(i, 1);
+      continue;
+    }
+
+    switch (e.type) {
+      case 'flash': {
+        e.mesh.scale.setScalar(e.base * (0.6 + t * 3.0));
+        e.mesh.material.opacity = Math.pow(1 - t, 2.2);
+        break;
+      }
+      case 'ball': {
+        e.mesh.scale.setScalar(e.base * (0.55 + t * 2.3));
+        e.mesh.material.opacity = Math.pow(1 - t, 1.4);
+        e.mesh.material.color.setHSL(0.13 - t * 0.13, 1, 0.66 - t * 0.34);
+        break;
+      }
+      case 'ring': {
+        e.mesh.scale.setScalar(e.base * (1 + t * 5.2));
+        e.mesh.material.opacity = Math.pow(1 - t, 1.8) * 0.9;
+        break;
+      }
+      case 'spark': {
+        e.vel.y -= 66 * dt;
+        e.mesh.position.addScaledVector(e.vel, dt);
+        e.mesh.material.opacity = 1 - t * t;
+        e.mesh.rotation.x += dt * 13;
+        e.mesh.rotation.y += dt * 10;
+        e.mesh.scale.multiplyScalar(1 - dt * 1.0);
+        break;
+      }
+      case 'smoke': {
+        e.mesh.position.addScaledVector(e.vel, dt);
+        e.vel.multiplyScalar(1 - dt * 1.6);
+        e.mesh.scale.setScalar(e.base * (0.8 + t * 1.9));
+        e.mesh.material.opacity = 0.5 * Math.pow(1 - t, 1.3);
+        break;
+      }
+      case 'debris': {
+        e.vel.y -= 58 * dt;
+        e.mesh.position.addScaledVector(e.vel, dt);
+        e.mesh.rotation.x += e.angVel.x * dt;
+        e.mesh.rotation.y += e.angVel.y * dt;
+        e.mesh.rotation.z += e.angVel.z * dt;
+
+        const gh = terrainHeight(e.mesh.position.x, e.mesh.position.z);
+        if (e.mesh.position.y < gh + 1) {
+          e.mesh.position.y = gh + 1;
+          e.vel.y *= -0.25;
+          e.vel.x *= 0.7;
+          e.vel.z *= 0.7;
+          e.angVel.multiplyScalar(0.6);
+        }
+        e.mesh.material.opacity = Math.max(0, 1 - t * t * 1.3);
+        e.mesh.material.transparent = true;
+        break;
+      }
+    }
+  }
+}
+
+/* =========================================================
+   键盘 / 鼠标输入
+========================================================= */
+const KEY_MAP = { KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' };
+
+function clampViewOffsets() {
+  camYawOff   = Math.max(-CAM_YAW_MAX, Math.min(CAM_YAW_MAX, camYawOff));
+  camPitchOff = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, camPitchOff));
+}
+
+/* 视角回正（Alt 键） */
+function resetView() {
+  camYawOff = 0;
+  camPitchOff = 0;
+  if (navigator.vibrate) navigator.vibrate(12);
+}
+
+/* 鼠标光标显隐（进入任务自动隐藏，Tab 键切换，结算面板恢复显示） */
+function setCursorHidden(h) {
+  G.cursorHidden = !!h;
+  document.body.classList.toggle('hide-cursor', G.cursorHidden);
+}
+
+function bindKeyboardMouse() {
+  /* ---- 键盘：WASD 飞行 / Alt 视角回正 / 左Shift 加力 / Tab 显隐鼠标 ---- */
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Alt') { e.preventDefault(); resetView(); }
+    if (e.code === 'Tab') { e.preventDefault(); setCursorHidden(!G.cursorHidden); return; }
+    if (e.code === 'ShiftLeft') { keys.boost = true; return; }
+    const k = KEY_MAP[e.code];
+    if (!k) return;
+    if (e.ctrlKey || e.metaKey) return;   // 带 Ctrl / Cmd 时不触发飞行，避免拦截浏览器快捷键
+    keys[k] = true;
+    e.preventDefault();
+  });
+
+  window.addEventListener('keyup', e => {
+    if (e.code === 'ShiftLeft') { keys.boost = false; return; }
+    const k = KEY_MAP[e.code];
+    if (k) keys[k] = false;
+  });
+
+  /* ---- 左键：按住机炮扫射 ---- */
+  /* ---- 右键：按住轰炸瞄准（显示预瞄环），松开投弹 ---- */
+  window.addEventListener('mousedown', e => {
+    if (e.button === 0) {
+      keys.fire = true;
+    } else if (e.button === 2) {
+      e.preventDefault();
+      if (G.aiming) return;
+      if (G.started && !G.over && !G.crashing) {
+        G.aiming = true;
+        if (navigator.vibrate) navigator.vibrate(8);
+      }
+    }
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (e.button === 0) {
+      keys.fire = false;
+    } else if (e.button === 2) {
+      if (!G.aiming) return;
+      G.aiming = false;
+      if (G.started && !G.over && !G.crashing) {
+        dropBomb(getForward().clone());
+        if (navigator.vibrate) navigator.vibrate(22);
+      }
+    }
+  });
+
+  /* 屏蔽右键菜单 */
+  window.addEventListener('contextmenu', e => e.preventDefault());
+
+  /* ---- 鼠标滑动：拖动视角（灵敏度 MOUSE_SENS，范围与摇杆时代一致） ---- */
+  window.addEventListener('mousemove', e => {
+    if (G.aiming && (e.buttons & 2) === 0) G.aiming = false; // 右键在窗口外松开：兜底取消瞄准
+    if (mousePX === null) { mousePX = e.clientX; mousePY = e.clientY; return; }
+    const dx = e.clientX - mousePX;
+    const dy = e.clientY - mousePY;
+    mousePX = e.clientX;
+    mousePY = e.clientY;
+    if (!G.started || G.over || G.crashing) return;
+    if (dx) camYawOff   -= dx * MOUSE_SENS;
+    if (dy) camPitchOff -= dy * MOUSE_SENS;
+    if (dx || dy) clampViewOffsets();
+  });
+
+  /* 窗口失焦：清空按键、取消瞄准，防止状态卡住 */
+  window.addEventListener('blur', () => {
+    keys.left = keys.right = keys.up = keys.down = keys.fire = false;
+    keys.boost = false;
+    G.aiming = false;
+    mousePX = null;
+    mousePY = null;
+  });
+}
+
+/* =========================================================
+   姿态 / 相机
+========================================================= */
+const _fwd = new THREE.Vector3();
+const _worldUp = new THREE.Vector3(0, 1, 0);
+const _right = new THREE.Vector3();
+const _up = new THREE.Vector3();
+
+function getForward() {
+  return _fwd.set(0, 0, -1).applyQuaternion(plane.quaternion);
+}
+
+/* 当前空速（含左Shift 加力） */
+function curSpeed() {
+  return CFG.speed * (1 + G.boost * (BOOST_MULT - 1));
+}
+
+function updateCamera(dt) {
+  const fwd = getForward().clone();
+
+  _right.crossVectors(fwd, _worldUp);
+  if (_right.lengthSq() < 0.0001) _right.set(1, 0, 0);
+  _right.normalize();
+  _up.crossVectors(_right, fwd).normalize();
+
+  const camPos = plane.position.clone()
+    .addScaledVector(fwd, -30)
+    .addScaledVector(_up, 9.5);
+
+  const lookAt = plane.position.clone()
+    .addScaledVector(fwd, 15)
+    .addScaledVector(_up, 2.5);
+
+  // 应用视角偏移（围绕飞机旋转）
+  if (camYawOff !== 0 || camPitchOff !== 0) {
+    _tmpEuler.set(camPitchOff, camYawOff, 0, 'YXZ');
+    _tmpQuat.setFromEuler(_tmpEuler);
+
+    _tmpVec.copy(camPos).sub(plane.position).applyQuaternion(_tmpQuat).add(plane.position);
+    camPos.copy(_tmpVec);
+
+    _tmpVec.copy(lookAt).sub(plane.position).applyQuaternion(_tmpQuat).add(plane.position);
+    lookAt.copy(_tmpVec);
+  }
+
+  const camGround = terrainHeight(camPos.x, camPos.z) + 9;
+  if (camPos.y < camGround) camPos.y = camGround;
+
+  if (!camInit) {
+    camera.position.copy(camPos);
+    camLook.copy(lookAt);
+    camInit = true;
+  }
+
+  camera.position.lerp(camPos, 1 - Math.exp(-8 * dt));
+  camLook.lerp(lookAt, 1 - Math.exp(-11 * dt));
+  camera.lookAt(camLook);
+
+  if (G.shake > 0.001) {
+    const s = G.shake;
+    camera.position.x += (Math.random() - 0.5) * s * 1.6;
+    camera.position.y += (Math.random() - 0.5) * s * 1.6;
+    camera.position.z += (Math.random() - 0.5) * s * 1.6;
+    G.shake -= dt * 7;
+    if (G.shake < 0) G.shake = 0;
+  }
+}
+
+/* =========================================================
+   落点预测（长按投弹才显示，大小与爆炸半径一致）
+========================================================= */
+function updateAim() {
+  if (!G.aiming) {
+    if (aimRing.visible) aimRing.visible = false;
+    return;
+  }
+
+  const p = plane.position.clone();
+  const v = getForward().clone().multiplyScalar(curSpeed());
+  const step = 0.1;
+  let hit = null;
+
+  for (let i = 0; i < 260; i++) {
+    v.y -= CFG.gravity * step;
+    p.addScaledVector(v, step);
+    const gh = terrainHeight(p.x, p.z);
+    if (p.y <= gh) { hit = p.clone(); hit.y = gh; break; }
+  }
+
+  if (hit) {
+    aimRing.visible = true;
+    aimRing.position.set(hit.x, hit.y + 5, hit.z);
+    aimRing.scale.setScalar(1);
+    const pulse = 0.62 + 0.32 * Math.sin(performance.now() * 0.008);
+    aimRing.material.opacity = pulse;
+  } else {
+    aimRing.visible = false;
+  }
+}
+
+/* =========================================================
+   机炮预瞄（按住左键扫射时显示弹着点准星）
+========================================================= */
+function updateGunAim() {
+  if (!keys.fire || !G.started || G.over || G.crashing) {
+    if (gunReticle.visible) gunReticle.visible = false;
+    return;
+  }
+
+  /* 子弹为直线弹道：从炮口沿机头方向步进，找地形 / 建筑弹着点 */
+  const fwd = getForward().clone();
+  const pos = plane.position.clone().addScaledVector(fwd, 13);
+  const step = 10;
+  let hit = null;
+
+  for (let i = 0; i < 130; i++) {
+    pos.addScaledVector(fwd, step);
+    const gh = terrainHeight(pos.x, pos.z);
+    if (pos.y <= gh) { hit = pos.clone(); hit.y = gh; break; }
+
+    const near = queryBuildings(pos.x, pos.z, 24);
+    for (let j = 0; j < near.length; j++) {
+      const b = near[j];
+      if (b.dead) continue;
+      if (pos.x > b.x - b.hw && pos.x < b.x + b.hw &&
+          pos.z > b.z - b.hd && pos.z < b.z + b.hd &&
+          pos.y > b.y0 && pos.y < b.y1) { hit = pos.clone(); break; }
+    }
+    if (hit) break;
+  }
+
+  if (!hit) { gunReticle.visible = false; return; }
+
+  gunReticle.visible = true;
+  gunReticle.position.copy(hit);
+  const dist = camera.position.distanceTo(hit);
+  gunReticle.scale.setScalar(Math.max(2.5, Math.min(40, dist * 0.024)));
+  gunReticle.lookAt(camera.position);
+  gunReticle.userData.mat.opacity = 0.55 + 0.35 * Math.sin(performance.now() * 0.012);
+}
+
+/* =========================================================
+   碰撞 & 坠毁
+========================================================= */
+function checkPlaneCollision() {
+  const p = plane.position;
+
+  const gh = terrainHeight(p.x, p.z);
+  if (p.y < gh + 3) {
+    startCrash();
+    return;
+  }
+
+  const R = CFG.planeR;
+  const nearby = queryBuildings(p.x, p.z, R + 90);
+  for (let i = 0; i < nearby.length; i++) {
+    const b = nearby[i];
+    if (b.dead) continue;
+    if (sphereHitsBuilding(p.x, p.y, p.z, R, b)) {
+      startCrash();
+      return;
+    }
+  }
+}
+
+function startCrash() {
+  if (G.crashing || G.over) return;
+  G.crashing = true;
+  G.crashTime = 0;
+  G.aiming = false;
+  if (gunReticle) gunReticle.visible = false;
+  Sound.silenceEngine();
+  Sound.boom(1.0);
+  spawnExplosion(plane.position.clone(), 1.8);
+  G.shake = 2.0;
+  if (navigator.vibrate) navigator.vibrate([40, 30, 80]);
+}
+
+function updateCrash(dt) {
+  G.crashTime += dt;
+
+  plane.position.y -= 95 * dt;
+  plane.rotateZ(4.5 * dt);
+  plane.rotateX(-1.8 * dt);
+
+  const fwd = getForward();
+  plane.position.addScaledVector(fwd, 45 * dt);
+
+  const flame = plane.userData.flame;
+  if (flame) flame.material.opacity *= (1 - dt * 4);
+
+  const gh = terrainHeight(plane.position.x, plane.position.z);
+  if (plane.position.y < gh + 4 || G.crashTime > 2.2) {
+    spawnExplosion(plane.position.clone(), 5.5);
+    Sound.boom(1.8);
+    G.shake = 2.5;
+    plane.visible = false;
+    G.crashing = false;
+    G.over = true;
+    setTimeout(showGameOver, 700);
+  }
+
+  updateEffects(dt);
+  updateCamera(dt);
+}
+
+/* =========================================================
+   HUD
+========================================================= */
+const hudScore     = document.getElementById('hudScore');
+const hudDestroyed = document.getElementById('hudDestroyed');
+const hudAlt       = document.getElementById('hudAlt');
+let lastScore = -1, lastDestroyed = -1, lastAlt = -1;
+
+function updateHUD() {
+  const gh = terrainHeight(plane.position.x, plane.position.z);
+  const alt = Math.max(0, Math.round(plane.position.y - gh));
+  if (alt !== lastAlt) { hudAlt.textContent = alt + 'm'; lastAlt = alt; }
+  if (G.score !== lastScore) { hudScore.textContent = G.score; lastScore = G.score; }
+  if (G.destroyed !== lastDestroyed) {
+    hudDestroyed.textContent = G.destroyed; lastDestroyed = G.destroyed;
+  }
+}
+
+/* =========================================================
+   游戏流程
+========================================================= */
+function resetPlane() {
+  plane.position.set(700, 520, 1800);
+  plane.quaternion.identity();
+  plane.lookAt(700, 380, 0);
+  camInit = false;
+  camYawOff = 0;
+  camPitchOff = 0;
+}
+
+function startGame() {
+  overlay.classList.add('hide');
+  setCursorHidden(true);
+
+  for (const b of buildings) {
+    scene.remove(b.body);
+    scene.remove(b.roof);
+  }
+  buildings.length = 0;
+  bHash.clear();
+
+  for (const bu of bullets) scene.remove(bu.mesh);
+  bullets.length = 0;
+
+  for (const bo of bombs) scene.remove(bo.mesh);
+  bombs.length = 0;
+
+  for (const e of effects) {
+    scene.remove(e.mesh);
+    if (e.ownsMat && e.mesh.material) e.mesh.material.dispose();
+    if (e.ownsGeo && e.mesh.geometry) e.mesh.geometry.dispose();
+  }
+  effects.length = 0;
+
+  createCity();
+
+  plane.visible = true;
+  resetPlane();
+
+  G.started = true;
+  G.over = false;
+  G.crashing = false;
+  G.aiming = false;
+  G.score = 0;
+  G.destroyed = 0;
+  G.fireTimer = 0;
+  G.shake = 0;
+  G.boost = 0;
+  gunReticle.visible = false;
+
+  Sound.init();
+  if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
+  Sound.setEngine(0.55);
+
+  clock.getDelta();
+  updateHUD();
+}
+
+function showGameOver() {
+  setCursorHidden(false);
+  if (gunReticle) gunReticle.visible = false;
+  const panel = document.getElementById('panel');
+  panel.innerHTML =
+    '<h1>坠机了</h1>' +
+    '<div class="sub">AIRCRAFT DESTROYED</div>' +
+    '<div class="bigscore">' + G.score + '</div>' +
+    '<p>击毁建筑 ' + G.destroyed + ' 栋<br>嘛……主人，下次小心点嘛。</p>' +
+    '<button id="startBtn">再来一次</button>';
+  overlay.classList.remove('hide');
+  document.getElementById('startBtn').addEventListener('click', onStartClick);
+}
+
+function onStartClick() {
+  Sound.init();
+  if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
+  startGame();
+}
+
+/* =========================================================
+   主更新
+========================================================= */
+function update(dt) {
+  if (!G.started || G.over) return;
+
+  if (G.crashing) { updateCrash(dt); return; }
+
+  /* 加力（左Shift）：平滑升降，供速度 / 尾焰 / 引擎声共用 */
+  G.boost += ((keys.boost ? 1 : 0) - G.boost) * (1 - Math.exp(-7 * dt));
+
+  const rollIn  = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
+  const pitchIn = (keys.up   ? 1 : 0) - (keys.down  ? 1 : 0);
+
+  /* 姿态 */
+  plane.rotateZ(rollIn * CFG.rollRate * dt);
+  plane.rotateX(pitchIn * CFG.pitchRate * dt);
+  plane.rotateY(rollIn * CFG.yawRate * dt);
+
+  if (rollIn === 0) {
+    const rightV = new THREE.Vector3(1, 0, 0).applyQuaternion(plane.quaternion);
+    const rollAngle = Math.atan2(rightV.y, Math.hypot(rightV.x, rightV.z));
+    plane.rotateZ(-rollAngle * 1.8 * dt);
+  }
+
+  /* 前进（加力时提速） */
+  const forward = getForward().clone();
+  plane.position.addScaledVector(forward, curSpeed() * dt);
+
+  /* 升限 */
+  if (plane.position.y > CFG.ceil) {
+    plane.position.y = CFG.ceil;
+    plane.rotateX(-1.8 * dt);
+  }
+
+  /* 地图边界 */
+  const hd = Math.hypot(plane.position.x, plane.position.z);
+  if (hd > CFG.mapHalf) {
+    const toCenter = new THREE.Vector3(-plane.position.x, 0, -plane.position.z).normalize();
+    const fwdH = new THREE.Vector3(forward.x, 0, forward.z).normalize();
+    const crossY = fwdH.z * toCenter.x - fwdH.x * toCenter.z;
+    plane.rotateY(crossY * 1.3 * dt);
+    plane.position.x *= 0.996;
+    plane.position.z *= 0.996;
+  }
+
+  /* 碰撞检测 */
+  checkPlaneCollision();
+  if (G.crashing) { updateEffects(dt); updateCamera(dt); updateHUD(); return; }
+
+  /* 尾焰（加力时更长、更亮、偏白） */
+  const flame = plane.userData.flame;
+  if (flame) {
+    const bs = G.boost;
+    const s = (0.85 + Math.random() * 0.42) * (1 + bs * 1.1);
+    flame.scale.set(s, s, s * (0.85 + Math.random() * 0.55 + bs * 1.5));
+    flame.material.opacity = Math.min(1, 0.45 + Math.random() * 0.45 + bs * 0.4);
+    flame.material.color.setRGB(0.5 + bs * 0.42, 0.88 + bs * 0.08, 1);
+  }
+
+  /* 引擎音（加力时更响、更低沉、更震撼） */
+  const engInt = 0.5 + (keys.up ? 0.18 : 0) - (keys.down ? 0.16 : 0);
+  Sound.setEngine(Math.max(0.25, Math.min(1, engInt)), G.boost);
+
+  /* 开火 */
+  if (G.fireTimer > 0) G.fireTimer -= dt;
+  if (keys.fire && G.fireTimer <= 0) {
+    fireBullet();
+    G.fireTimer = CFG.fireCD;
+  }
+
+  /* 子弹 */
+  updateBullets(dt);
+
+  /* 炸弹 */
+  for (let i = bombs.length - 1; i >= 0; i--) {
+    const b = bombs[i];
+    b.age += dt;
+    b.vel.y -= CFG.gravity * dt;
+    b.mesh.position.addScaledVector(b.vel, dt);
+
+    const dir = b.vel.clone().normalize();
+    b.mesh.lookAt(b.mesh.position.clone().add(dir));
+
+    b.trail -= dt;
+    if (b.trail <= 0 && b.age > 0.12) {
+      b.trail = 0.055;
+      spawnSmoke(b.mesh.position.clone(), 1.9, false);
+    }
+
+    const bgh = terrainHeight(b.mesh.position.x, b.mesh.position.z);
+    if (b.mesh.position.y <= bgh) {
+      b.mesh.position.y = bgh;
+      onBombImpact(b.mesh.position.clone());
+      scene.remove(b.mesh);
+      bombs.splice(i, 1);
+      continue;
+    }
+    if (b.age > 18) {
+      scene.remove(b.mesh);
+      bombs.splice(i, 1);
+    }
+  }
+
+  /* 特效 */
+  updateEffects(dt);
+
+  /* 相机 / 瞄准 */
+  updateCamera(dt);
+  updateAim();
+  updateGunAim();
+  updateHUD();
+}
+
+/* =========================================================
+   初始化
+========================================================= */
+function init() {
+  renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.sortObjects = true;
+  document.body.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 1, 12000);
+  clock = new THREE.Clock();
+
+  scene.add(new THREE.HemisphereLight(0xd6ecff, 0x4a5a3a, 0.9));
+  const sun = new THREE.DirectionalLight(0xfff3d8, 0.85);
+  sun.position.set(900, 1400, 600);
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x9ec8ff, 0.25);
+  fill.position.set(-800, 500, -900);
+  scene.add(fill);
+
+  createSky();
+  createTerrain();
+  createWater();
+  createVegetation();
+  createClouds();
+  createCity();
+
+  BOMB_PROTO = makeBombProto();
+
+  plane = createPlane();
+  scene.add(plane);
+  resetPlane();
+
+  /* 预瞄环 —— 半径和炸弹爆炸半径完全一致 */
+  aimRing = new THREE.Mesh(
+    new THREE.RingGeometry(BOMB_RADIUS * 0.80, BOMB_RADIUS, 56),
+    new THREE.MeshBasicMaterial({
+      color: 0xff4433, transparent: true, opacity: 0.85,
+      side: THREE.DoubleSide, depthTest: false, depthWrite: false
+    })
+  );
+  aimRing.rotation.x = -Math.PI / 2;
+  aimRing.renderOrder = 999;
+  aimRing.visible = false;
+  scene.add(aimRing);
+
+  /* 机炮准星：按住左键扫射时显示在弹着点 */
+  gunReticle = new THREE.Group();
+  const gunMat = new THREE.MeshBasicMaterial({
+    color: 0xffcc44, transparent: true, opacity: 0.8,
+    side: THREE.DoubleSide, depthTest: false, depthWrite: false
+  });
+  gunReticle.add(new THREE.Mesh(new THREE.RingGeometry(0.72, 0.86, 28), gunMat));
+  const gunBarH = new THREE.BoxGeometry(0.6, 0.085, 0.06);
+  const gunBarV = new THREE.BoxGeometry(0.085, 0.6, 0.06);
+  [-1, 1].forEach(s => {
+    const bh = new THREE.Mesh(gunBarH, gunMat);
+    bh.position.x = s * 1.25;
+    gunReticle.add(bh);
+    const bv = new THREE.Mesh(gunBarV, gunMat);
+    bv.position.y = s * 1.25;
+    gunReticle.add(bv);
+  });
+  gunReticle.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.06), gunMat));
+  gunReticle.traverse(o => { o.renderOrder = 1000; });
+  gunReticle.userData.mat = gunMat;
+  gunReticle.visible = false;
+  scene.add(gunReticle);
+
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
+
+  bindKeyboardMouse();
+
+  document.getElementById('startBtn').addEventListener('click', onStartClick);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
+  });
+
+  updateCamera(1);
+  updateHUD();
+  animate();
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+/* =========================================================
+   主循环
+========================================================= */
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  update(dt);
+  renderer.render(scene, camera);
+}
+
+/* =========================================================
+   启动
+========================================================= */
+if (typeof THREE === 'undefined') {
+  document.getElementById('panel').innerHTML =
+    '<h1>加载失败</h1><p>Three.js 没有加载成功，检查一下网络再刷新吧。</p>';
+} else {
+  init();
+}
+
+})();
+</script>
+</body>
+</html>

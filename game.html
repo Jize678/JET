@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
-<title>鲸鱼娘的空袭任务</title>
+<title>Open JET</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{width:100%;height:100%;overflow:hidden;background:#8ec5e8;
@@ -23,6 +23,17 @@
             align-items:center;min-width:64px}
   .hud-item .label{font-size:10px;opacity:.7;letter-spacing:1px}
   .hud-item .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+  .hud-item .hpbar{width:76px;height:9px;border-radius:5px;margin-top:5px;
+                   background:rgba(255,255,255,.16);overflow:hidden}
+  #hpFill{height:100%;width:100%;border-radius:5px;background:#5ee06a}
+  #dmgFlash{position:fixed;inset:0;pointer-events:none;opacity:0;
+            background:radial-gradient(ellipse at center,rgba(255,40,20,0) 40%,rgba(255,40,20,.6) 100%)}
+  #lockMark{position:fixed;left:50%;top:50%;width:46px;height:46px;display:none;
+            transform:translate(-50%,-50%);border:2px solid rgba(255,90,60,.95);
+            border-radius:50%;pointer-events:none;z-index:7;
+            box-shadow:0 0 12px rgba(255,70,40,.55),inset 0 0 8px rgba(255,70,40,.35)}
+  #lockMark::after{content:'';position:absolute;left:50%;top:50%;width:4px;height:4px;
+            transform:translate(-50%,-50%);background:rgba(255,90,60,.95);border-radius:50%}
 
   #overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
            background:radial-gradient(circle at 50% 40%,rgba(40,90,150,.72),rgba(6,16,32,.92));
@@ -53,16 +64,19 @@
 
 <div id="hud">
   <div class="hud-row">
+    <div class="hud-item"><span class="label">机体</span><div class="hpbar"><div id="hpFill"></div></div></div>
     <div class="hud-item"><span class="label">得分</span><span class="val" id="hudScore">0</span></div>
-    <div class="hud-item"><span class="label">击毁建筑</span><span class="val" id="hudDestroyed">0</span></div>
+    <div class="hud-item"><span class="label">击毁敌方单位</span><span class="val" id="hudDestroyed">0</span></div>
     <div class="hud-item"><span class="label">高度</span><span class="val" id="hudAlt">0</span></div>
   </div>
+  <div id="dmgFlash"></div>
+  <div id="lockMark"></div>
 </div>
 
 <div id="overlay">
   <div class="panel" id="panel">
-    <h1>鲸鱼娘的空袭任务</h1>
-    <div class="sub">CETACEA AIR STRIKE</div>
+    <h1>Open JET</h1>
+    <div class="sub">AIR STRIKE</div>
     <p>自由飞行、机炮扫射、投弹轰炸。撞到建筑或地面就会坠毁。</p>
     <div class="keys">
       <div>W / S 俯仰升降</div>
@@ -72,6 +86,8 @@
       <div>滑动鼠标 拖动视角</div>
       <div>Alt 视角回正 · 左Shift 加力</div>
       <div style="grid-column:1/-1">Tab 显示 / 隐藏鼠标（进入任务自动隐藏）</div>
+      <div style="grid-column:1/-1">R 锁定屏幕中心最近的单位（每帧居中跟随，再按 R 解除）</div>
+      <div style="grid-column:1/-1">长按 Space 关闭发动机（减速、下坠）· 松开恢复</div>
     </div>
     <button id="startBtn">开始任务</button>
   </div>
@@ -106,24 +122,36 @@ const BOMB_RADIUS   = 195;     // 炸弹爆炸半径
 
 const WATER_LEVEL = 4;
 
+/* 关车（长按 Space）动力学：推力回落 → 减速 + 低头下坠 */
+const CUT_GLIDE     = 0.55;    // 滑翔速度下限（相对巡航；实际速度按 G.thrust 平滑过渡）
+const CUT_SPOOL_DN  = 0.75;    // 关车后推力回落速率（/s）
+const CUT_SPOOL_UP  = 1.0;     // 松开后推力恢复速率（/s）
+const CUT_SINK_RATE = 1.0;     // 低头角速度上限（rad/s，乘以失推力比例）
+const CUT_SINK_MAX  = -0.5;    // 下坠收敛下滑角（机头方向 y 分量，约 -30°）
+
 const G = {
   started:false, over:false, crashing:false, crashTime:0,
   score:0, destroyed:0, fireTimer:0, shake:0, bulletSide:1,
-  aiming:false, boost:0, cursorHidden:false
+  aiming:false, boost:0, cursorHidden:false,
+  hp:32, hpMax:32, invuln:0, hitFlash:0,
+  thrust:1, lockTarget: null, engCut: false
 };
 
-const keys = { left:false, right:false, up:false, down:false, fire:false, boost:false };
+const keys = { left:false, right:false, up:false, down:false, fire:false, boost:false, engineCut:false };
 
 let scene, camera, renderer, clock;
-let plane, aimRing, gunReticle;
+let plane, bombMark, gunReticle;
 const bombs = [], bullets = [], effects = [], buildings = [];
+const aaaGuns = [], samSites = [], enemies = [], eBullets = [], missiles = [];
+const wingmen = [], wingRespawn = [0, 0];
+let enemyTimer = 0;
 let camInit = false;
 const camLook = new THREE.Vector3();
 const overlay = document.getElementById('overlay');
 
 /* ---- 视角偏移（由鼠标拖动控制） ---- */
 let camYawOff = 0, camPitchOff = 0;
-const CAM_YAW_MAX = 1.35;
+/* 水平视角 360° 连续环绕（无死区）；垂直限幅 */
 const CAM_PITCH_MIN = -0.85;
 const CAM_PITCH_MAX = 1.05;
 const MOUSE_SENS = 0.0042;          // 鼠标拖动视角灵敏度 rad/px
@@ -154,6 +182,11 @@ const BULLET_GEO = (function () {
 })();
 const BULLET_MAT = new THREE.MeshBasicMaterial({
   color: 0xffe066, transparent: true, opacity: 0.92,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+/* 敌方曳光弹（红橙色，便于区分敌我） */
+const E_BULLET_MAT = new THREE.MeshBasicMaterial({
+  color: 0xff6644, transparent: true, opacity: 0.95,
   blending: THREE.AdditiveBlending, depthWrite: false
 });
 const DEBRIS_MATS = new Map();
@@ -287,6 +320,73 @@ const Sound = {
 
     src.connect(lp); lp.connect(g); g.connect(this.master);
     src.start(t); src.stop(t + dur + 0.15);
+  },
+
+  /* 防空机枪远距枪声：低频闷响，按距离衰减，带节流 */
+  aaa(vol) {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (t - (this.lastAaa || 0) < 0.055) return;
+    this.lastAaa = t;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = 0.9 + Math.random() * 0.3;
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 900;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.14 * vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 0.1);
+  },
+
+  /* 导弹发射：噪声扫频上扬 */
+  launch() {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = 0.8;
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(260, t);
+    bp.frequency.exponentialRampToValueAtTime(1900, t + 0.6);
+    bp.Q.value = 1.1;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.16, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+
+    src.connect(bp); bp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 0.85);
+  },
+
+  /* 玩家被命中的闷响 */
+  hit() {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = 0.6 + Math.random() * 0.25;
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 420;
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+
+    src.connect(lp); lp.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + 0.18);
   }
 };
 
@@ -691,8 +791,7 @@ function destroyBuilding(b) {
   Sound.boom(0.7 + Math.min(1.0, b.h / 260));
 
   G.shake = Math.min(1.6, G.shake + 0.45);
-  G.destroyed++;
-  G.score += 10;
+  G.score += 10;                                        // 建筑只计分，不计入「击毁敌方单位」
 }
 
 function spawnDebris(b) {
@@ -883,6 +982,18 @@ function onBombImpact(pos) {
       }
     }
   }
+
+  /* 波及敌方单位 */
+  for (const g of aaaGuns) {
+    if (!g.dead && Math.hypot(g.x - pos.x, g.z - pos.z) < R) destroyAAA(g);
+  }
+  for (const s of samSites) {
+    if (!s.dead && Math.hypot(s.x - pos.x, s.z - pos.z) < R) destroySAM(s);
+  }
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    if (!e.dead && e.mesh.position.distanceTo(pos) < R) destroyEnemy(e, true);
+  }
 }
 
 /* =========================================================
@@ -964,6 +1075,51 @@ function updateBullets(dt) {
           break;
         }
       }
+
+      /* 命中敌方单位（防空机枪 / 导弹阵地 / 敌机） */
+      if (!removed) {
+        for (let j = 0; j < aaaGuns.length; j++) {
+          const g = aaaGuns[j];
+          if (g.dead) continue;
+          if (p.distanceToSquared(_u2.set(g.x, g.baseY + 3.0, g.z)) < 81) {
+            g.hp--;
+            if (g.hp <= 0) destroyAAA(g); else spawnHitSpark(p);
+            scene.remove(bu.mesh);
+            bullets.splice(i, 1);
+            removed = true;
+            break;
+          }
+        }
+      }
+      if (!removed) {
+        for (let j = 0; j < samSites.length; j++) {
+          const s = samSites[j];
+          if (s.dead) continue;
+          if (p.distanceToSquared(_u2.set(s.x, s.baseY + 8.0, s.z)) < 576) {
+            s.hp--;
+            if (s.hp <= 0) destroySAM(s); else spawnHitSpark(p);
+            scene.remove(bu.mesh);
+            bullets.splice(i, 1);
+            removed = true;
+            break;
+          }
+        }
+      }
+      if (!removed) {
+        for (let j = 0; j < enemies.length; j++) {
+          const en = enemies[j];
+          if (en.dead) continue;
+          if (p.distanceToSquared(en.mesh.position) < 81) {
+            en.hp--;
+            if (en.hp <= 0) destroyEnemy(en, true); else spawnHitSpark(p);
+            scene.remove(bu.mesh);
+            bullets.splice(i, 1);
+            removed = true;
+            break;
+          }
+        }
+      }
+
       if (removed) break;
     }
 
@@ -972,6 +1128,1146 @@ function updateBullets(dt) {
     if (bu.age > 2.2) {
       scene.remove(bu.mesh);
       bullets.splice(i, 1);
+    }
+  }
+}
+
+/* =========================================================
+   敌方单位：防空机枪 / 防空导弹阵地 / 敌机
+========================================================= */
+const AAA_RANGE = 820;        // 防空机枪射程
+const SAM_RANGE = 980;        // 导弹阵地锁定范围
+const ENEMY_MAX = 3;          // 敌机同时在场上限
+const THREAT_BULLET_SPD = 400;
+const AAA_SCALE = 2.0;        // 防空车模型缩放（通古斯卡式，整体加大）
+const SAM_SCALE = 3.2;        // SAM 阵地模型缩放（TEL 载具，等比放大 2 倍）
+/* 敌方逻辑用的临时向量 */
+const _u1 = new THREE.Vector3(), _u2 = new THREE.Vector3();
+const _u3 = new THREE.Vector3(), _u4 = new THREE.Vector3();
+const _vt = new THREE.Vector3();
+const _w1 = new THREE.Vector3(), _w2 = new THREE.Vector3();
+const _w3 = new THREE.Vector3(), _w4 = new THREE.Vector3();
+
+/* 共享材质 */
+const M_A_BASE  = new THREE.MeshLambertMaterial({ color: 0x4f5a45 });
+const M_A_TUR   = new THREE.MeshLambertMaterial({ color: 0x6b7a55 });
+const M_A_DARK  = new THREE.MeshLambertMaterial({ color: 0x363d33 });
+const M_A_MOUNT = new THREE.MeshLambertMaterial({ color: 0x5a6a4c });
+const M_A_BARREL= new THREE.MeshLambertMaterial({ color: 0x2b302b });
+const M_S_PAD   = new THREE.MeshLambertMaterial({ color: 0x8d9298 });
+const M_S_DARK  = new THREE.MeshLambertMaterial({ color: 0x3f464c });
+const M_S_GREEN = new THREE.MeshLambertMaterial({ color: 0x5f6e4e });
+const M_S_DISH  = new THREE.MeshLambertMaterial({ color: 0x9aa0a6 });
+const M_S_DECK  = new THREE.MeshLambertMaterial({ color: 0x6b7a55 });
+const M_S_GLASS = new THREE.MeshLambertMaterial({ color: 0x2f3a44 });
+const M_S_TUBE  = new THREE.MeshLambertMaterial({ color: 0x55654a });
+const M_S_WHEEL = new THREE.MeshLambertMaterial({ color: 0x2e3338 });
+/* 营地小房子：军绿涂装（与旧帐篷同色），门为深一档军绿 */
+const M_H_WALL  = new THREE.MeshLambertMaterial({ color: 0x8a8f66 });
+const M_H_ROOF  = new THREE.MeshLambertMaterial({ color: 0x8a8f66, side: THREE.DoubleSide });
+const M_H_DOOR  = new THREE.MeshLambertMaterial({ color: 0x5e6448 });
+const M_CAMP_CRATE = new THREE.MeshLambertMaterial({ color: 0x8f7f5a });
+const M_CAMP_CRATE2= new THREE.MeshLambertMaterial({ color: 0x6b6f4f });
+const M_CAMP_DRUM  = new THREE.MeshLambertMaterial({ color: 0x5b6248 });
+const M_CAMP_BAG   = new THREE.MeshLambertMaterial({ color: 0x8a8468 });
+const CAMP_CRATE_GEO = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+const CAMP_DRUM_GEO  = new THREE.CylinderGeometry(0.42, 0.42, 1.1, 10);
+const CAMP_BAG_GEO   = new THREE.BoxGeometry(1.5, 0.5, 0.62);
+/* 双坡屋面（三棱柱）几何：底面宽 1.732r、脊高 1.5r、长 2L（小房子屋顶用） */
+function makePrismGeo(r, L) {
+  const w = r * 0.8660254, b = -r * 0.5, t = r;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    0, t, -L,   -w, b, -L,   w, b, -L,
+    0, t,  L,    w, b,  L,  -w, b,  L,
+  ]), 3));
+  g.setIndex([0, 2, 1, 3, 4, 5, 0, 1, 5, 0, 5, 3, 0, 3, 4, 0, 4, 2]);
+  g.computeVertexNormals();
+  return g;
+}
+
+/* 小房子（墙体 + 双坡屋顶 + 门；SAM / AAA 营地共用） */
+function makeHouse(w, h, d, wallMat, roofMat, ry) {
+  const house = new THREE.Group();
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+  walls.position.y = h / 2 + 0.1;
+  house.add(walls);
+  const r = w * 0.62;
+  const roof = new THREE.Mesh(makePrismGeo(r, d * 0.58), roofMat);
+  roof.position.y = h + 0.1 + r * 0.5;
+  house.add(roof);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.72, 0.07), M_H_DOOR);
+  door.position.set(w * 0.2, 0.56, d / 2 + 0.05);
+  house.add(door);
+  house.rotation.y = ry;
+  return house;
+}
+
+const M_MS_BODY = new THREE.MeshLambertMaterial({ color: 0xdcdfe3 });
+const M_MS_NOSE = new THREE.MeshLambertMaterial({ color: 0xd23b30 });
+const M_MS_FIN  = new THREE.MeshLambertMaterial({ color: 0x4a4f57 });
+const M_E_BODY  = new THREE.MeshLambertMaterial({ color: 0x4a5058 });
+const M_E_WING  = new THREE.MeshLambertMaterial({ color: 0x565d66 });
+const M_E_RED   = new THREE.MeshLambertMaterial({ color: 0xd23b30 });
+const M_E_DARK  = new THREE.MeshLambertMaterial({ color: 0x2e3338 });
+const M_E_GLASS = new THREE.MeshPhongMaterial({ color: 0x6e2723, shininess: 120, transparent: true, opacity: 0.9 });
+
+/* 让物体的 -Z 朝向 dir（可带滚转） */
+const _oF = new THREE.Vector3(), _oR = new THREE.Vector3();
+const _oU = new THREE.Vector3(), _oB = new THREE.Vector3();
+const _oQ = new THREE.Quaternion(), _oM = new THREE.Matrix4();
+function orientToward(obj, dir, bank) {
+  _oF.copy(dir).normalize();
+  _oR.crossVectors(_oF, _worldUp);
+  if (_oR.lengthSq() < 1e-6) _oR.set(1, 0, 0); else _oR.normalize();
+  _oU.crossVectors(_oR, _oF).normalize();
+  if (bank) {
+    _oQ.setFromAxisAngle(_oF, bank);
+    _oR.applyQuaternion(_oQ);
+    _oU.applyQuaternion(_oQ);
+  }
+  _oB.copy(_oF).negate();
+  _oM.makeBasis(_oR, _oU, _oB);
+  obj.quaternion.setFromRotationMatrix(_oM);
+}
+
+/* ---- 防空机枪：通古斯卡式履带防空车（炮塔两侧双管机炮）+ 营地小房子 ---- */
+function createAAAGun(x, z) {
+  const groundY = terrainHeight(x, z);
+  const yaw0 = Math.atan2(x, z);                              // 车体朝向地图中心
+  const fwdX = -Math.sin(yaw0), fwdZ = -Math.cos(yaw0);
+  const half = 2.9 * AAA_SCALE;                               // 车体世界半长
+  const hF = terrainHeight(x + fwdX * half, z + fwdZ * half);
+  const hB = terrainHeight(x - fwdX * half, z - fwdZ * half);
+
+  const g = new THREE.Group();
+  g.rotation.order = 'YXZ';
+  g.rotation.y = yaw0;
+  g.rotation.x = Math.atan2(hF - hB, half * 2);               // 贴合坡向
+  g.position.set(x, (hF + hB) / 2 - 0.4, z);
+
+  /* 履带底盘 */
+  const trackGeo = new THREE.BoxGeometry(0.8, 0.9, 5.8);
+  for (const tx of [-1.35, 1.35]) {
+    const track = new THREE.Mesh(trackGeo, M_S_WHEEL);
+    track.position.set(tx, 0.55, 0.15);
+    g.add(track);
+  }
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.0, 5.2), M_A_TUR);
+  hull.position.y = 1.05;
+  g.add(hull);
+  const glacis = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.8, 0.9), M_A_MOUNT);
+  glacis.position.set(0, 1.12, -2.85);
+  glacis.rotation.x = -0.35;
+  g.add(glacis);
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.42, 0.1), M_S_GLASS);
+  windshield.position.set(0, 1.38, -2.5);
+  windshield.rotation.x = -0.35;
+  g.add(windshield);
+
+  /* 炮塔（水平跟踪）+ 俯仰组（左右两侧双管机炮，炮管加大） */
+  const turret = new THREE.Group();
+  turret.position.set(0, 1.75, 0.1);
+  g.add(turret);
+  const tbody = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.8, 2.2), M_A_TUR);
+  tbody.position.set(0, 0.4, 0.15);
+  turret.add(tbody);
+  const optic = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.5), M_A_MOUNT);
+  optic.position.set(-0.45, 0.98, 0.6);
+  turret.add(optic);
+  const radome = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.06, 12), M_S_DISH);
+  radome.position.set(-0.45, 1.22, 0.6);
+  radome.rotation.x = 0.35;
+  turret.add(radome);
+
+  const pitch = new THREE.Group();
+  pitch.position.set(0, 0.55, 0);
+  turret.add(pitch);
+  const podGeo = new THREE.BoxGeometry(0.62, 0.55, 1.35);
+  const barrelGeo = new THREE.CylinderGeometry(0.14, 0.14, 4.2, 8);
+  const muzzles = [];
+  for (const sx of [-1, 1]) {
+    const pod = new THREE.Mesh(podGeo, M_A_MOUNT);
+    pod.position.set(sx * 1.28, 0, 0.05);
+    pitch.add(pod);
+    for (const bx of [-0.185, 0.185]) {
+      const barrel = new THREE.Mesh(barrelGeo, M_A_BARREL);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(sx * 1.28 + bx, 0, -2.0);
+      pitch.add(barrel);
+      const mz = new THREE.Object3D();
+      mz.position.set(sx * 1.28 + bx, 0, -4.2);
+      pitch.add(mz);
+      muzzles.push(mz);
+    }
+  }
+
+  /* 营地：2 栋小房子（与 SAM 营地同款） */
+  [[-3.8, 2.9, 0.6, 1.7, 1.05, 1.6, M_H_WALL, M_H_ROOF],
+   [4.4, -2.5, -2.3, 1.6, 1.0, 1.55, M_H_WALL, M_H_ROOF]].forEach(hh => {
+    const house = makeHouse(hh[3], hh[4], hh[5], hh[6], hh[7], hh[2]);
+    house.position.set(hh[0], 0, hh[1]);
+    g.add(house);
+  });
+
+  g.scale.setScalar(AAA_SCALE);
+  scene.add(g);
+
+  return {
+    mesh: g, turret, pitch, muzzles, x, z, baseY: groundY, yawBase: yaw0,
+    yaw: Math.random() * Math.PI * 2, hp: GUN_KILL_HITS,
+    burst: 0, shots: 0, shotGap: 0, cool: 4 + Math.random() * 4,
+    mzIdx: 0, dead: false
+  };
+}
+
+/* ---- 导弹（待发弹与飞行弹共用外观；机头朝 -Z；与 TEL 载具比例匹配） ---- */
+function makeMissileMesh() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 3.55, 10), M_MS_BODY);
+  body.rotation.x = Math.PI / 2;
+  body.position.z = 0.25;
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.15, 10), M_MS_NOSE);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -2.1;
+  g.add(nose);
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.66, 0.78), M_MS_FIN);
+    fin.position.set(Math.cos(a) * 0.38, Math.sin(a) * 0.38, 1.7);
+    fin.rotation.z = a;
+    g.add(fin);
+  }
+  return g;
+}
+
+/* ---- 防空导弹阵地（锁定后发射，射后装填） ---- */
+function createSAM(x, z) {
+  const groundY = terrainHeight(x, z);
+  const yaw0 = Math.atan2(x, z);                              // 车头朝向地图中心
+  const fwdX = -Math.sin(yaw0), fwdZ = -Math.cos(yaw0);
+  const half = 4.6 * SAM_SCALE;                               // 载具世界半长
+  const hF = terrainHeight(x + fwdX * half, z + fwdZ * half); // 车头端地形
+  const hB = terrainHeight(x - fwdX * half, z - fwdZ * half); // 车尾端地形
+
+  const g = new THREE.Group();
+  g.rotation.order = 'YXZ';
+  g.rotation.y = yaw0;
+  g.rotation.x = Math.atan2(hF - hB, half * 2);               // 贴合坡向（长载具防插地）
+  g.position.set(x, (hF + hB) / 2 - 0.5, z);
+
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.12, 11.2), M_S_PAD);
+  pad.position.y = 0.06;
+  g.add(pad);
+
+  /* 长条 TEL 载具：底盘 / 后甲板 / 驾驶室 / 挡风 / 8 轮 */
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.9, 9.2), M_S_GREEN);
+  chassis.position.y = 1.05;
+  g.add(chassis);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.25, 4.6), M_S_DECK);
+  deck.position.set(0, 1.62, 1.5);
+  g.add(deck);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.2, 1.9), M_S_GREEN);
+  cab.position.set(0, 2.05, -3.35);
+  g.add(cab);
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.55, 0.14), M_S_GLASS);
+  windshield.position.set(0, 2.28, -4.25);
+  g.add(windshield);
+  const wheelGeo = new THREE.CylinderGeometry(0.58, 0.58, 0.5, 12);
+  for (const wz of [-3.6, -2.4, 2.0, 3.3]) {
+    for (const wx of [-1.05, 1.05]) {
+      const wheel = new THREE.Mesh(wheelGeo, M_S_WHEEL);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wx, 0.58, wz);
+      g.add(wheel);
+    }
+  }
+
+  /* 双垂直发射筒：左筒带盖；右筒装待发导弹（弹头垂直向上） */
+  const tubeGeo = new THREE.CylinderGeometry(0.7, 0.7, 4.4, 14);
+  const collarGeo = new THREE.CylinderGeometry(0.78, 0.78, 0.28, 14);
+  for (const tx of [-0.82, 0.82]) {
+    const tube = new THREE.Mesh(tubeGeo, M_S_TUBE);
+    tube.position.set(tx, 3.95, 1.7);
+    g.add(tube);
+    const collar = new THREE.Mesh(collarGeo, M_S_DARK);
+    collar.position.set(tx, 6.0, 1.7);
+    g.add(collar);
+  }
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.14, 14), M_S_DARK);
+  lid.position.set(-0.82, 6.22, 1.7);
+  g.add(lid);
+
+  const msl = makeMissileMesh();
+  msl.position.set(0.82, 7.35, 1.7);                          // 弹尾插入右筒
+  msl.rotation.x = Math.PI / 2;                               // 弹头垂直朝上
+  g.add(msl);
+
+  /* 雷达桅杆（独立支杆 + 旋转天线） */
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.4, 8), M_S_DARK);
+  post.position.set(-3.0, 1.7, -2.9);
+  g.add(post);
+
+  const dish = new THREE.Group();
+  dish.position.set(-3.0, 3.5, -2.9);
+  g.add(dish);
+  const dishTop = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.09, 12), M_S_DISH);
+  dishTop.rotation.x = 0.35;
+  dish.add(dishTop);
+
+  /* ---- 营地：5 栋小房子（墙体 + 双坡屋顶 + 门） ---- */
+  [[-4.6, 3.4, -0.4, 1.7, 1.05, 1.6, M_H_WALL, M_H_ROOF],
+   [4.9, -2.8, 2.4, 1.9, 1.15, 1.7, M_H_WALL, M_H_ROOF],
+   [-4.2, -3.9, 0.9, 1.55, 0.95, 1.5, M_H_WALL, M_H_ROOF],
+   [5.2, 1.6, 2.9, 1.65, 1.0, 1.55, M_H_WALL, M_H_ROOF],
+   [-5.3, 0.5, -1.2, 1.8, 1.1, 1.65, M_H_WALL, M_H_ROOF]].forEach(hh => {
+    const house = makeHouse(hh[3], hh[4], hh[5], hh[6], hh[7], hh[2]);
+    house.position.set(hh[0], 0, hh[1]);
+    g.add(house);
+  });
+
+  /* ---- 营地杂物：弹药箱 / 油桶 / 沙袋 ---- */
+  [[3.4, 0.45, 3.3, 0.3, M_CAMP_CRATE], [4.1, 0.45, 2.6, -0.4, M_CAMP_CRATE2],
+   [3.0, 1.35, 3.05, 0.9, M_CAMP_CRATE2], [4.6, 0.45, 3.6, 0.15, M_CAMP_CRATE]].forEach(c => {
+    const crate = new THREE.Mesh(CAMP_CRATE_GEO, c[4]);
+    crate.position.set(c[0], c[1], c[2]);
+    crate.rotation.y = c[3];
+    g.add(crate);
+  });
+  [[-3.4, -3.4], [-2.5, -3.6]].forEach(p => {
+    const drum = new THREE.Mesh(CAMP_DRUM_GEO, M_CAMP_DRUM);
+    drum.position.set(p[0], 0.55, p[1]);
+    g.add(drum);
+  });
+  [[0.0, 4.6, 0.05], [1.45, 4.45, -0.15], [-1.45, 4.5, 0.12]].forEach(p => {
+    const bag = new THREE.Mesh(CAMP_BAG_GEO, M_CAMP_BAG);
+    bag.position.set(p[0], 0.25, p[1]);
+    bag.rotation.y = p[2];
+    g.add(bag);
+  });
+
+  g.scale.setScalar(SAM_SCALE);
+  scene.add(g);
+
+  return {
+    mesh: g, dish, missile: msl, x, z, baseY: groundY,
+    yaw: yaw0, lock: 0, cd: 3 + Math.random() * 3, hp: 14, dead: false
+  };
+}
+
+/* ---- 敌机（深色涂装 + 红色机翼尖，机头朝 -Z） ---- */
+function createEnemyPlane() {
+  const g = new THREE.Group();
+
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.05, 7.4, 12), M_E_BODY);
+  fus.rotation.x = Math.PI / 2;
+  fus.position.z = 0.2;
+  g.add(fus);
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.6, 12), M_E_BODY);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -4.5;
+  g.add(nose);
+
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.3, 2.6), M_E_WING);
+  wing.position.set(0, -0.25, 0.3);
+  g.add(wing);
+
+  [-5.1, 5.1].forEach(x => {
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.36, 2.6), M_E_RED);
+    tip.position.set(x, -0.25, 0.3);
+    g.add(tip);
+  });
+
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.26, 1.9, 1.4), M_E_RED);
+  fin.position.set(0, 1.3, 2.75);
+  g.add(fin);
+
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.24, 1.3), M_E_WING);
+  tail.position.set(0, 0.05, 2.7);
+  g.add(tail);
+
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.62, 10, 8), M_E_GLASS);
+  canopy.scale.set(1, 0.71, 1.8);
+  canopy.position.set(0, 0.68, -1.1);
+  g.add(canopy);
+
+  const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.82, 0.7, 10), M_E_DARK);
+  noz.rotation.x = Math.PI / 2;
+  noz.position.z = 4.05;
+  g.add(noz);
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.36, 1.4, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xffa640, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  flame.rotation.x = Math.PI / 2;
+  flame.position.z = 4.55;
+  g.add(flame);
+  g.userData.flame = flame;
+
+  g.scale.setScalar(1.3);
+  return g;
+}
+
+/* ---- 布防：5 挺防空机枪 + 3 处导弹阵地（位置经地形校验） ---- */
+function createDefenses() {
+  const AAA_POS = [[-1450, 350], [1350, -700], [450, 1250], [-1250, 1050], [60, -600]];
+  const SAM_POS = [[-150, -1400], [1500, 300], [-1550, -150]];
+  for (const p of AAA_POS) aaaGuns.push(createAAAGun(p[0], p[1]));
+  for (const p of SAM_POS) samSites.push(createSAM(p[0], p[1]));
+}
+
+/* ---- 敌机生成：从地图边缘进入 ---- */
+function spawnEnemy() {
+  const ang = Math.random() * Math.PI * 2;
+  const R = 2050;
+  const m = createEnemyPlane();
+  m.position.set(
+    Math.cos(ang) * R,
+    Math.min(880, Math.max(320, plane.position.y + (Math.random() - 0.5) * 320)),
+    Math.sin(ang) * R
+  );
+  scene.add(m);
+
+  const fwd = new THREE.Vector3().subVectors(plane.position, m.position).normalize();
+  orientToward(m, fwd, 0);
+  enemies.push({
+    mesh: m, hp: 12, spd: 58 + Math.random() * 10,
+    bank: 0, fire: 0, shots: 0, shotGap: 0, fireCd: 1.5 + Math.random() * 2,
+    sideBias: Math.random() < 0.5 ? -1 : 1,
+    target: 'plane', retarget: 0,
+    fwd, dead: false
+  });
+}
+
+/* ---- 威胁子弹（防空机枪 / 敌机共用） ---- */
+function spawnThreatBullet(pos, dir, spd, spread) {
+  const m = new THREE.Mesh(BULLET_GEO, E_BULLET_MAT);
+  m.position.copy(pos);
+  scene.add(m);
+
+  _u2.copy(dir);
+  _u2.x += (Math.random() - 0.5) * spread;
+  _u2.y += (Math.random() - 0.5) * spread;
+  _u2.z += (Math.random() - 0.5) * spread;
+  _u2.normalize();
+
+  orientToward(m, _u2, 0);
+  eBullets.push({ mesh: m, vel: _u2.clone().multiplyScalar(spd), age: 0 });
+  spawnMuzzleFlash(pos);
+}
+
+/* 迭代求拦截点（写入 _u3）：|目标位置 + 目标速度·t − 炮口| = 弹速·t */
+function leadTarget(muzzle, bulletSpd, tPos, tVel) {
+  _u4.copy(tVel);
+  let t = _u3.copy(tPos).distanceTo(muzzle) / bulletSpd;
+  for (let k = 0; k < 2; k++) {
+    _u3.copy(tPos).addScaledVector(_u4, t);
+    t = _u3.distanceTo(muzzle) / bulletSpd;
+  }
+  _u3.copy(tPos).addScaledVector(_u4, t);
+  return _u3;
+}
+
+/* ---- 防空机枪更新：跟踪 + 连发 ---- */
+function fireAAAShot(gun) {
+  gun.mesh.updateMatrixWorld(true);
+  gun.mzIdx = (gun.mzIdx + 1) % gun.muzzles.length;   // 四管交替喷火
+  const mz = gun.muzzles[gun.mzIdx];
+  _u1.setFromMatrixPosition(mz.matrixWorld);
+
+  const dist = _u1.distanceTo(plane.position);
+  _vt.copy(getForward()).multiplyScalar(curSpeed());
+  leadTarget(_u1, THREAT_BULLET_SPD, plane.position, _vt);
+  _u2.subVectors(_u3, _u1).normalize();
+
+  spawnThreatBullet(_u1.clone(), _u2, THREAT_BULLET_SPD, 0.025);
+  const vol = Math.max(0, 1 - dist / 1500);
+  if (vol > 0.06) Sound.aaa(vol);
+}
+
+function updateAAA(dt) {
+  for (const gun of aaaGuns) {
+    if (gun.dead) continue;
+
+    const dx = plane.position.x - gun.x;
+    const dz = plane.position.z - gun.z;
+    const dh = Math.hypot(dx, dz);
+    const dist = Math.hypot(dh, plane.position.y - gun.baseY);
+    const canFire = G.started && !G.over && !G.crashing && dist < AAA_RANGE;
+
+    /* 炮塔水平跟踪 */
+    let yawErr = Math.atan2(-dx, -dz) - gun.yaw;
+    while (yawErr > Math.PI) yawErr -= Math.PI * 2;
+    while (yawErr < -Math.PI) yawErr += Math.PI * 2;
+    const yawStep = 2.2 * dt;
+    gun.yaw += Math.max(-yawStep, Math.min(yawStep, yawErr));
+    gun.turret.rotation.y = gun.yaw - gun.yawBase;    // 车体带朝向，炮塔取局部角
+
+    /* 炮管俯仰跟踪 */
+    const mountY = gun.baseY + (1.75 + 0.55) * AAA_SCALE;
+    const pitchTarget = Math.atan2(plane.position.y - mountY, Math.max(1, dh));
+    const pErr = pitchTarget - gun.pitch.rotation.x;
+    const pStep = 1.5 * dt;
+    gun.pitch.rotation.x += Math.max(-pStep, Math.min(pStep, pErr));
+
+    /* 连发 / 冷却 */
+    if (gun.burst > 0) {
+      gun.burst -= dt;
+      gun.shotGap -= dt;
+      if (gun.shotGap <= 0) {
+        gun.shotGap = 0.09;
+        fireAAAShot(gun);
+        gun.shots--;
+        if (gun.shots <= 0) gun.burst = 0;
+      }
+    } else {
+      gun.cool -= dt;
+      if (canFire && gun.cool <= 0 && Math.abs(yawErr) < 0.14 && Math.abs(pErr) < 0.22) {
+        gun.burst = 99;
+        gun.shots = 6 + (Math.random() * 5 | 0);
+        gun.shotGap = 0;
+        gun.cool = 1.6 + Math.random() * 1.3;
+      }
+    }
+  }
+}
+
+/* ---- 导弹阵地更新：跟踪 + 锁定 + 发射 + 装填 ---- */
+function launchSAM(s) {
+  s.mesh.updateMatrixWorld(true);
+  s.missile.updateMatrixWorld(true);
+  const pos = new THREE.Vector3().setFromMatrixPosition(s.missile.matrixWorld);
+
+  const m = makeMissileMesh();
+  m.position.copy(pos);
+  scene.add(m);
+
+  const dir = new THREE.Vector3().subVectors(plane.position, pos).normalize();
+  orientToward(m, dir, 0);
+  m.scale.setScalar(SAM_SCALE);                              // 与阵地上待发弹同尺寸
+  missiles.push({ mesh: m, dir, spd: 140, age: 0, trail: 0 });
+
+  Sound.launch();
+  spawnSmoke(pos.clone(), 3.0, false);                       // 冷发射筒口烟
+  s.missile.visible = false;
+  s.cd = 8;
+}
+
+function updateSAM(dt) {
+  for (const s of samSites) {
+    if (s.dead) continue;
+
+    const dx = plane.position.x - s.x;
+    const dz = plane.position.z - s.z;
+    const dist = Math.sqrt(dx * dx + dz * dz + (plane.position.y - s.baseY) * (plane.position.y - s.baseY));
+    const active = G.started && !G.over && !G.crashing;
+
+    /* 垂直发射系统无需瞄准：载具静止，仅雷达天线旋转 */
+    s.dish.rotation.y += dt * 2.4;
+
+    /* 锁定进度 */
+    if (active && dist < SAM_RANGE) s.lock = Math.min(1.6, s.lock + dt);
+    else s.lock = Math.max(0, s.lock - dt * 2);
+
+    /* 发射与装填 */
+    s.cd -= dt;
+    if (active && s.lock > 1.2 && s.cd <= 0 && missiles.length < 3) launchSAM(s);
+    if (!s.missile.visible && s.cd < 5.2) s.missile.visible = true;
+  }
+}
+
+/* ---- 敌机更新：追击 + 规避 + 开火（限制转向速率保证可规避） ---- */
+function updateEnemies(dt) {
+  enemyTimer -= dt;
+  if (enemyTimer <= 0 && enemies.length < ENEMY_MAX) {
+    spawnEnemy();
+    enemyTimer = 9 + Math.random() * 5;
+  }
+
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    const m = e.mesh;
+
+    /* 目标选择：玩家或僚机中较近者（每 5~8 秒重评，僚机可分担火力） */
+    e.retarget -= dt;
+    if (e.retarget <= 0 || (e.target !== 'plane' && e.target.dead)) {
+      e.retarget = 5 + Math.random() * 3;
+      let best = 'plane', bestD = m.position.distanceTo(plane.position);
+      for (const w of wingmen) {
+        if (w.dead) continue;
+        const d = m.position.distanceTo(w.mesh.position);
+        if (d < bestD) { bestD = d; best = w; }
+      }
+      e.target = best;
+    }
+    const tgt = e.target;
+    const tPos = tgt === 'plane' ? plane.position : tgt.mesh.position;
+
+    const dx = tPos.x - m.position.x;
+    const dy = tPos.y - m.position.y;
+    const dz = tPos.z - m.position.z;
+    const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy + dz * dz));
+
+    /* 撞击目标：同归于尽 */
+    if (dist < 12) {
+      destroyEnemy(e, true);
+      if (tgt === 'plane') startCrash(); else destroyWingman(tgt);
+      continue;
+    }
+
+    /* 期望方向：追击；进入交汇区则从目标侧向 90m 处绕行；贴地则拉起 */
+    let tx = dx / dist, ty = dy / dist, tz = dz / dist;
+    if (dist < 260) {
+      /* 交汇脱离：从玩家侧向绕行通过，避免撞机与贴脸穿模 */
+      _u2.set(tx, 0, tz);
+      _u3.crossVectors(_u2, _worldUp);
+      if (_u3.lengthSq() > 1e-6) {
+        _u3.normalize();
+        const ox = dx + _u3.x * e.sideBias * 90;
+        const oy = dy + 20;
+        const oz = dz + _u3.z * e.sideBias * 90;
+        const ol = Math.max(1, Math.hypot(ox, oy, oz));
+        tx = ox / ol; ty = oy / ol; tz = oz / ol;
+      }
+    }
+    const gh = terrainHeight(m.position.x, m.position.z);
+    if (m.position.y < gh + 80) ty = Math.max(ty, 0.45);
+    if (m.position.y > 950) ty = Math.min(ty, -0.1);
+    _u1.set(tx, ty, tz).normalize();
+
+    /* 限速转向 */
+    const ang = e.fwd.angleTo(_u1);
+    if (ang > 1e-5) {
+      const t = Math.min(1, (0.9 * dt) / ang);
+      e.fwd.multiplyScalar(1 - t).addScaledVector(_u1, t).normalize();
+    }
+
+    /* 依据转向方向倾斜机身 */
+    _u2.crossVectors(e.fwd, _worldUp);
+    if (_u2.lengthSq() > 1e-6) {
+      _u2.normalize();
+      const side = _u1.dot(_u2);
+      const bankTarget = Math.max(-1.0, Math.min(1.0, side * 1.2));
+      e.bank += (bankTarget - e.bank) * (1 - Math.exp(-3 * dt));
+    }
+    orientToward(m, e.fwd, e.bank);
+
+    /* 前进与地形碰撞 */
+    m.position.addScaledVector(e.fwd, e.spd * dt);
+    const ghn = terrainHeight(m.position.x, m.position.z);
+    if (m.position.y < ghn + 3) {
+      destroyEnemy(e, false);
+      continue;
+    }
+
+    /* 尾焰闪烁 */
+    const fl = m.userData.flame;
+    if (fl) {
+      const s = 0.8 + Math.random() * 0.5;
+      fl.scale.set(s, s, s * (0.8 + Math.random() * 0.6));
+      fl.material.opacity = 0.55 + Math.random() * 0.4;
+    }
+
+    /* 开火：对准且进入射程时打连发 */
+    if (e.fire > 0) {
+      e.fire -= dt;
+      e.shotGap -= dt;
+      if (e.shotGap <= 0 && dist < 800) {
+        e.shotGap = 0.1;
+        /* 命中点预判（对当前目标） */
+        if (tgt === 'plane') _vt.copy(getForward()).multiplyScalar(curSpeed());
+        else _vt.copy(tgt.fwd).multiplyScalar(tgt.spd);
+        _u2.copy(e.fwd).multiplyScalar(7.6).add(m.position);
+        leadTarget(_u2, 430, tPos, _vt);
+        _u1.subVectors(_u3, _u2).normalize();
+        spawnThreatBullet(_u2.clone(), _u1, 430, 0.04);
+        const vol = Math.max(0, 1 - dist / 1400);
+        if (vol > 0.07) Sound.aaa(vol);
+        e.shots--;
+        if (e.shots <= 0) {
+          e.fire = 0;
+          e.fireCd = 1.6 + Math.random() * 1.2;
+        }
+      }
+    } else {
+      e.fireCd -= dt;
+      if (e.fireCd <= 0 && dist < 680) {
+        _u1.set(dx / dist, dy / dist, dz / dist);
+        if (e.fwd.dot(_u1) > 0.992) {
+          e.fire = 1.4;
+          e.shots = 6 + (Math.random() * 5 | 0);
+          e.shotGap = 0;
+        }
+      }
+    }
+  }
+}
+
+/* 玩家受击：扣 1 点血量（带 0.22s 无敌帧），归零坠毁；导弹命中与撞击仍是即死 */
+function damagePlayer(n) {
+  if (!G.started || G.over || G.crashing) return;
+  if (G.invuln > 0) return;
+  G.invuln = 0.22;
+  G.hitFlash = 0.6;
+  G.shake = Math.min(2.0, G.shake + 0.5);
+  Sound.hit();
+  G.hp -= n;
+  if (G.hp <= 0) {
+    G.hp = 0;
+    startCrash();
+  }
+}
+
+/* 点到线段距离（标量版，用于导弹近炸段式判定，避免高速穿透） */
+function segDist(p0, p1, q) {
+  const ax = p1.x - p0.x, ay = p1.y - p0.y, az = p1.z - p0.z;
+  const L2 = ax * ax + ay * ay + az * az;
+  let t = 0;
+  if (L2 > 1e-9) {
+    t = ((q.x - p0.x) * ax + (q.y - p0.y) * ay + (q.z - p0.z) * az) / L2;
+    t = Math.max(0, Math.min(1, t));
+  }
+  const cx = p0.x + ax * t - q.x, cy = p0.y + ay * t - q.y, cz = p0.z + az * t - q.z;
+  return Math.sqrt(cx * cx + cy * cy + cz * cz);
+}
+
+/* ---- 威胁物：敌方弹幕与导弹推进 / 命中判定 ---- */
+function updateThreats(dt) {
+  const active = G.started && !G.over && !G.crashing;
+
+  for (let i = eBullets.length - 1; i >= 0; i--) {
+    const b = eBullets[i];
+    b.age += dt;
+    const stepLen = b.vel.length() * dt;
+    const steps = Math.max(1, Math.ceil(stepLen / 7));
+    let removed = false;
+
+    for (let s = 0; s < steps; s++) {
+      b.mesh.position.addScaledVector(b.vel, dt / steps);
+      const p = b.mesh.position;
+      if (p.y <= terrainHeight(p.x, p.z) + 0.5) {
+        spawnHitSpark(p);
+        removed = true;
+        break;
+      }
+      if (active && p.distanceToSquared(plane.position) < 64) {   // 半径 8 命中：扣血
+        damagePlayer(1);
+        removed = true;
+        break;
+      }
+      if (active && !removed) {
+        for (let j = 0; j < wingmen.length; j++) {
+          const w = wingmen[j];
+          if (w.dead) continue;
+          if (p.distanceToSquared(w.mesh.position) < 100) {        // 半径 10：僚机被击中
+            w.hp--;
+            if (w.hp <= 0) destroyWingman(w); else spawnHitSpark(p);
+            removed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (removed || b.age > 3.5) {
+      scene.remove(b.mesh);
+      eBullets.splice(i, 1);
+    }
+  }
+
+  for (let i = missiles.length - 1; i >= 0; i--) {
+    const ms = missiles[i];
+    ms.age += dt;
+
+    /* 追踪（限转向速率，可被大机动甩掉） */
+    _u1.subVectors(plane.position, ms.mesh.position);
+    const dist = Math.max(0.001, _u1.length());
+    _u1.multiplyScalar(1 / dist);
+    const ang = ms.dir.angleTo(_u1);
+    if (ang > 1e-5) {
+      const t = Math.min(1, (0.9 * dt) / ang);
+      ms.dir.multiplyScalar(1 - t).addScaledVector(_u1, t).normalize();
+    }
+    _u3.copy(ms.mesh.position);
+    ms.mesh.position.addScaledVector(ms.dir, ms.spd * dt);
+    orientToward(ms.mesh, ms.dir, 0);
+
+    /* 烟迹 */
+    ms.trail -= dt;
+    if (ms.trail <= 0) {
+      ms.trail = 0.05;
+      spawnSmoke(ms.mesh.position.clone(), 1.5, false);
+    }
+
+    const p = ms.mesh.position;
+    let blow = false;
+
+    if (active && segDist(_u3, p, plane.position) < 12) {   // 近炸半径 12（段式判定）
+      startCrash();
+      blow = true;
+    } else if (p.y <= terrainHeight(p.x, p.z) + 1) {
+      blow = true;
+    } else {
+      const near = queryBuildings(p.x, p.z, 24);
+      for (let j = 0; j < near.length; j++) {
+        const b = near[j];
+        if (b.dead) continue;
+        if (p.x > b.x - b.hw && p.x < b.x + b.hw &&
+            p.z > b.z - b.hd && p.z < b.z + b.hd &&
+            p.y > b.y0 && p.y < b.y1) { blow = true; break; }
+      }
+    }
+    if (ms.age > 6.5) blow = true;
+
+    if (blow) {
+      explosionAt(p.clone(), 2.4, 1.3);
+      scene.remove(ms.mesh);
+      missiles.splice(i, 1);
+    }
+  }
+}
+
+/* ---- 摧毁判定与结算 ---- */
+function explosionAt(pos, scale, power) {
+  spawnExplosion(pos, scale);
+  Sound.boom(power);
+  G.shake = Math.min(2.4, G.shake + 0.6);
+}
+
+function destroyAAA(g) {
+  if (g.dead) return;
+  g.dead = true;
+  scene.remove(g.mesh);
+  explosionAt(new THREE.Vector3(g.x, g.baseY + 4, g.z), 2.6, 1.2);
+  G.destroyed++;
+  G.score += 60;
+}
+
+function destroySAM(s) {
+  if (s.dead) return;
+  s.dead = true;
+  scene.remove(s.mesh);
+  explosionAt(new THREE.Vector3(s.x, s.baseY + 8, s.z), 3.2, 1.3);
+  G.destroyed++;
+  G.score += 90;
+}
+
+function destroyEnemy(e, scored) {
+  if (e.dead) return;
+  e.dead = true;
+  explosionAt(e.mesh.position.clone(), 2.6, 1.2);
+  scene.remove(e.mesh);
+  const idx = enemies.indexOf(e);
+  if (idx >= 0) enemies.splice(idx, 1);
+  if (scored) { G.destroyed++; G.score += 150; }
+}
+
+/* =========================================================
+   僚机（友军 AI）：编队跟随 / 交战敌机 / 击落后归队
+========================================================= */
+const WING_HP = 6;          // 僚机血量
+const WING_RESPAWN = 20;    // 击落后归队时间（秒）
+
+const M_W_BODY  = new THREE.MeshLambertMaterial({ color: 0xbfccd8 });
+const M_W_WING  = new THREE.MeshLambertMaterial({ color: 0xaebbc9 });
+const M_W_BLUE  = new THREE.MeshLambertMaterial({ color: 0x3a7bd5 });
+const M_W_DARK  = new THREE.MeshLambertMaterial({ color: 0x36434f });
+const M_W_GLASS = new THREE.MeshPhongMaterial({ color: 0x2f4a6e, shininess: 120, transparent: true, opacity: 0.9 });
+
+/* 僚机：浅灰蓝机身 + 蓝色翼尖/垂尾（与敌机深灰红明确区分） */
+function createWingmanPlane() {
+  const g = new THREE.Group();
+
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.1, 8.2, 12), M_W_BODY);
+  fus.rotation.x = Math.PI / 2;
+  fus.position.z = 0.3;
+  g.add(fus);
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.8, 12), M_W_BODY);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -5.0;
+  g.add(nose);
+
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(11.5, 0.3, 2.8), M_W_WING);
+  wing.position.set(0, -0.27, 0.4);
+  g.add(wing);
+
+  [-5.6, 5.6].forEach(x => {
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.36, 2.8), M_W_BLUE);
+    tip.position.set(x, -0.27, 0.4);
+    g.add(tip);
+  });
+
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.26, 1.9, 1.5), M_W_BLUE);
+  fin.position.set(0, 1.32, 3.0);
+  g.add(fin);
+
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.25, 1.4), M_W_WING);
+  tail.position.set(0, 0.05, 2.95);
+  g.add(tail);
+
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.66, 10, 8), M_W_GLASS);
+  canopy.scale.set(1, 0.71, 2.27);
+  canopy.position.set(0, 0.72, -1.6);
+  g.add(canopy);
+
+  const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.84, 0.7, 10), M_W_DARK);
+  noz.rotation.x = Math.PI / 2;
+  noz.position.z = 4.5;
+  g.add(noz);
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.34, 1.3, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0x9fd8ff, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  flame.rotation.x = Math.PI / 2;
+  flame.position.z = 5.0;
+  g.add(flame);
+  g.userData.flame = flame;
+
+  g.scale.setScalar(1.35);
+  return g;
+}
+
+/* 编队位置（玩家侧后方）写入 out */
+function wingFormationPos(side, out) {
+  _w1.copy(getForward());
+  _w2.crossVectors(_w1, _worldUp);
+  if (_w2.lengthSq() < 1e-6) _w2.set(1, 0, 0); else _w2.normalize();
+  _w3.crossVectors(_w2, _w1);
+  out.copy(plane.position)
+    .addScaledVector(_w1, -55)
+    .addScaledVector(_w2, side * 70)
+    .addScaledVector(_w3, -8);
+  return out;
+}
+
+function spawnWingman(side) {
+  const m = createWingmanPlane();
+  wingFormationPos(side, _w4);
+  const gh = terrainHeight(_w4.x, _w4.z);
+  if (_w4.y < gh + 40) _w4.y = gh + 40;
+  m.position.copy(_w4);
+  scene.add(m);
+
+  const fwd = getForward().clone();
+  orientToward(m, fwd, 0);
+  wingmen.push({
+    mesh: m, fwd, spd: curSpeed(), bank: 0, side, hp: WING_HP,
+    target: null, retarget: 0, fire: 0, shots: 0, shotGap: 0, fireCd: 1 + Math.random(),
+    dead: false
+  });
+}
+
+function destroyWingman(w) {
+  if (w.dead) return;
+  w.dead = true;
+  explosionAt(w.mesh.position.clone(), 2.4, 1.1);
+  scene.remove(w.mesh);
+  const idx = wingmen.indexOf(w);
+  if (idx >= 0) wingmen.splice(idx, 1);
+  wingRespawn[w.side > 0 ? 1 : 0] = WING_RESPAWN;
+}
+
+/* 僚机开火：曳光弹并入玩家子弹池（复用命中判定），命中敌机同样有效 */
+function fireWingBullet(w) {
+  const e = w.target;
+  if (!e || e.dead) return;
+  _vt.copy(e.fwd).multiplyScalar(e.spd);
+  _w3.copy(w.fwd).multiplyScalar(7.8).add(w.mesh.position);
+  leadTarget(_w3, 450, e.mesh.position, _vt);
+  _w2.subVectors(_u3, _w3).normalize();
+  _w2.x += (Math.random() - 0.5) * 0.03;
+  _w2.y += (Math.random() - 0.5) * 0.03;
+  _w2.z += (Math.random() - 0.5) * 0.03;
+  _w2.normalize();
+
+  const m = new THREE.Mesh(BULLET_GEO, BULLET_MAT);
+  m.position.copy(_w3);
+  scene.add(m);
+  orientToward(m, _w2, 0);
+  bullets.push({ mesh: m, vel: _w2.clone().multiplyScalar(450), age: 0 });
+  spawnMuzzleFlash(_w3);
+  const vol = Math.max(0, 1 - w.mesh.position.distanceTo(plane.position) / 1400);
+  if (vol > 0.05) Sound.aaa(vol * 0.8);
+}
+
+function updateWingmen(dt) {
+  /* 归队重生 */
+  for (let k = 0; k < 2; k++) {
+    const side = k === 0 ? -1 : 1;
+    wingRespawn[k] -= dt;
+    if (wingRespawn[k] <= 0 && !wingmen.some(w => w.side === side)) spawnWingman(side);
+  }
+
+  for (let i = wingmen.length - 1; i >= 0; i--) {
+    const w = wingmen[i];
+    if (w.dead) continue;
+    const m = w.mesh;
+
+    /* 主动出击：纯战斗机，发现任何敌机即自发脱离编队迎战（不对地面单位反应）；无敌机时回编队 */
+    w.retarget -= dt;
+    if (w.retarget <= 0 || (w.target && w.target.dead)) {
+      w.retarget = 1.0;
+      let best = null, bestD = 1e9;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const d = m.position.distanceTo(e.mesh.position);
+        if (d < bestD) { bestD = d; best = e; }
+      }
+      w.target = best;
+    }
+
+    let wantSpd;
+    if (w.target && !w.target.dead) {
+      /* ---- 交战：提前量追击 + 咬尾变速 + 近距规避 ---- */
+      const e = w.target;
+      const rdx = e.mesh.position.x - m.position.x;
+      const rdy = e.mesh.position.y - m.position.y;
+      const rdz = e.mesh.position.z - m.position.z;
+      const rawDist = Math.max(1, Math.sqrt(rdx * rdx + rdy * rdy + rdz * rdz));
+
+      /* 相撞：同归于尽 */
+      if (rawDist < 12) {
+        destroyEnemy(e, true);
+        destroyWingman(w);
+        continue;
+      }
+
+      let tx, ty, tz;
+      if (rawDist < 120) {
+        /* 极近处才做侧向脱离，避免对撞（近距缠斗其余时间保持机头指向） */
+        _w2.set(rdx / rawDist, 0, rdz / rawDist);
+        _w3.crossVectors(_w2, _worldUp);
+        if (_w3.lengthSq() < 1e-6) _w3.set(1, 0, 0); else _w3.normalize();
+        const ox = rdx + _w3.x * w.side * 90;
+        const oy = rdy + 20;
+        const oz = rdz + _w3.z * w.side * 90;
+        const ol = Math.max(1, Math.hypot(ox, oy, oz));
+        tx = ox / ol; ty = oy / ol; tz = oz / ol;
+        wantSpd = 110;
+      } else {
+        /* 提前量追击：瞄向 0.6 秒后的敌机位置 */
+        const ax = e.mesh.position.x + e.fwd.x * e.spd * 0.6;
+        const ay = e.mesh.position.y + e.fwd.y * e.spd * 0.6;
+        const az = e.mesh.position.z + e.fwd.z * e.spd * 0.6;
+        const ddx = ax - m.position.x, ddy = ay - m.position.y, ddz = az - m.position.z;
+        const dl = Math.max(1, Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz));
+        tx = ddx / dl; ty = ddy / dl; tz = ddz / dl;
+        const alignDot = tx * w.fwd.x + ty * w.fwd.y + tz * w.fwd.z;
+        if (alignDot > 0.85) {
+          /* 咬尾控速：接近目标速度避免冲过头 */
+          wantSpd = Math.min(150, Math.max(90, e.spd + (rawDist - 180) * 0.8));
+        } else {
+          /* 大角度回转减速收紧转弯半径，其余快步接近 */
+          wantSpd = alignDot < 0.25 ? 85 : 130;
+        }
+      }
+      _w1.set(tx, ty, tz);
+    } else {
+      /* ---- 编队：跟住玩家侧后方 ---- */
+      wingFormationPos(w.side, _w4);
+      const dx = _w4.x - m.position.x;
+      const dy = _w4.y - m.position.y;
+      const dz = _w4.z - m.position.z;
+      const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy + dz * dz));
+      if (dist < 35) _w1.copy(getForward());
+      else _w1.set(dx / dist, dy / dist, dz / dist);
+      /* 编队速度：下限 34 略低于关车滑翔速度（≈37），保证关车滑翔时也能跟住 */
+      wantSpd = Math.min(155, Math.max(34, curSpeed() + (dist - 30) * 0.9));
+    }
+
+    /* 与玩家保持安全距离（防穿模） */
+    const pdx = m.position.x - plane.position.x;
+    const pdy = m.position.y - plane.position.y;
+    const pdz = m.position.z - plane.position.z;
+    const pd = Math.max(1, Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz));
+    if (pd < 45) {
+      const k = 1.6 - pd / 45;
+      _w1.x += (pdx / pd) * k * 1.4;
+      _w1.y += (pdy / pd) * k * 0.8;
+      _w1.z += (pdz / pd) * k * 1.4;
+      _w1.normalize();
+    }
+
+    /* 贴地拉起 */
+    const gh = terrainHeight(m.position.x, m.position.z);
+    if (m.position.y < gh + 80) {
+      _w1.y = Math.max(_w1.y, 0.5);
+      _w1.normalize();
+    }
+
+    /* 限速转向 + 滚转 */
+    const ang = w.fwd.angleTo(_w1);
+    if (ang > 1e-5) {
+      const t = Math.min(1, (1.3 * dt) / ang);
+      w.fwd.multiplyScalar(1 - t).addScaledVector(_w1, t).normalize();
+    }
+    _w2.crossVectors(w.fwd, _worldUp);
+    if (_w2.lengthSq() > 1e-6) {
+      _w2.normalize();
+      const side = _w1.dot(_w2);
+      const bankTarget = Math.max(-1.1, Math.min(1.1, side * 1.3));
+      w.bank += (bankTarget - w.bank) * (1 - Math.exp(-3.5 * dt));
+    }
+    orientToward(m, w.fwd, w.bank);
+
+    /* 平滑变速与前进 */
+    w.spd += (wantSpd - w.spd) * (1 - Math.exp(-1.5 * dt));
+    m.position.addScaledVector(w.fwd, w.spd * dt);
+
+    if (m.position.y < terrainHeight(m.position.x, m.position.z) + 3) {
+      destroyWingman(w);
+      continue;
+    }
+
+    /* 尾焰 */
+    const fl = m.userData.flame;
+    if (fl) {
+      const s = 0.8 + Math.random() * 0.45;
+      fl.scale.set(s, s, s * (0.8 + Math.random() * 0.5));
+      fl.material.opacity = 0.55 + Math.random() * 0.4;
+    }
+
+    /* 开火（仅交战时打连发） */
+    if (w.target && !w.target.dead) {
+      const distT = m.position.distanceTo(w.target.mesh.position);
+      if (w.fire > 0) {
+        w.fire -= dt;
+        w.shotGap -= dt;
+        if (w.shotGap <= 0 && distT < 780) {
+          w.shotGap = 0.1;
+          fireWingBullet(w);
+          w.shots--;
+          if (w.shots <= 0) {
+            w.fire = 0;
+            w.fireCd = 1.4 + Math.random() * 1.2;
+          }
+        }
+      } else {
+        w.fireCd -= dt;
+        if (w.fireCd <= 0 && distT < 700) {
+          const dxx = w.target.mesh.position.x - m.position.x;
+          const dyy = w.target.mesh.position.y - m.position.y;
+          const dzz = w.target.mesh.position.z - m.position.z;
+          const dd = Math.max(1, Math.sqrt(dxx * dxx + dyy * dyy + dzz * dzz));
+          _w4.set(dxx / dd, dyy / dd, dzz / dd);
+          if (w.fwd.dot(_w4) > 0.96) {
+            w.fire = 1.2;
+            w.shots = 5 + (Math.random() * 4 | 0);
+            w.shotGap = 0;
+          }
+        }
+      }
     }
   }
 }
@@ -1164,12 +2460,14 @@ function updateEffects(dt) {
 const KEY_MAP = { KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' };
 
 function clampViewOffsets() {
-  camYawOff   = Math.max(-CAM_YAW_MAX, Math.min(CAM_YAW_MAX, camYawOff));
+  if (camYawOff > Math.PI) camYawOff -= Math.PI * 2;
+  else if (camYawOff < -Math.PI) camYawOff += Math.PI * 2;
   camPitchOff = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, camPitchOff));
 }
 
-/* 视角回正（Alt 键） */
+/* 视角回正（Alt 点按归正）：锁定期间视角由锁定接管，Alt 不生效、也不解除锁定 */
 function resetView() {
+  if (G.lockTarget) return;
   camYawOff = 0;
   camPitchOff = 0;
   if (navigator.vibrate) navigator.vibrate(12);
@@ -1182,11 +2480,22 @@ function setCursorHidden(h) {
 }
 
 function bindKeyboardMouse() {
-  /* ---- 键盘：WASD 飞行 / Alt 视角回正 / 左Shift 加力 / Tab 显隐鼠标 ---- */
+  /* ---- 键盘：WASD 飞行 / Alt 视角回正 / 左Shift 加力 / Tab 显隐鼠标 / 长按 Space 关发动机 ---- */
   window.addEventListener('keydown', e => {
     if (e.key === 'Alt') { e.preventDefault(); resetView(); }
     if (e.code === 'Tab') { e.preventDefault(); setCursorHidden(!G.cursorHidden); return; }
     if (e.code === 'ShiftLeft') { keys.boost = true; return; }
+    if (e.code === 'Space') {                              // 长按关发动机（不用 Ctrl：浏览器保留快捷键无法屏蔽）
+      if (G.started && !G.over && !G.crashing) e.preventDefault(); // 飞行中拦截空格默认行为
+      keys.engineCut = true;
+      return;
+    }
+    if (e.code === 'KeyR') {
+      if (e.ctrlKey || e.metaKey) return;   // 不拦截 Ctrl/Cmd+R
+      e.preventDefault();
+      toggleLock();
+      return;
+    }
     const k = KEY_MAP[e.code];
     if (!k) return;
     if (e.ctrlKey || e.metaKey) return;   // 带 Ctrl / Cmd 时不触发飞行，避免拦截浏览器快捷键
@@ -1196,6 +2505,7 @@ function bindKeyboardMouse() {
 
   window.addEventListener('keyup', e => {
     if (e.code === 'ShiftLeft') { keys.boost = false; return; }
+    if (e.code === 'Space') { keys.engineCut = false; return; }
     const k = KEY_MAP[e.code];
     if (k) keys[k] = false;
   });
@@ -1240,6 +2550,7 @@ function bindKeyboardMouse() {
     mousePX = e.clientX;
     mousePY = e.clientY;
     if (!G.started || G.over || G.crashing) return;
+    if (G.lockTarget) return;   // 锁定视角期间鼠标不控制视角
     if (dx) camYawOff   -= dx * MOUSE_SENS;
     if (dy) camPitchOff -= dy * MOUSE_SENS;
     if (dx || dy) clampViewOffsets();
@@ -1249,6 +2560,7 @@ function bindKeyboardMouse() {
   window.addEventListener('blur', () => {
     keys.left = keys.right = keys.up = keys.down = keys.fire = false;
     keys.boost = false;
+    keys.engineCut = false;
     G.aiming = false;
     mousePX = null;
     mousePY = null;
@@ -1267,50 +2579,140 @@ function getForward() {
   return _fwd.set(0, 0, -1).applyQuaternion(plane.quaternion);
 }
 
-/* 当前空速（含左Shift 加力） */
+/* 当前空速：基础速度 × 加力（关车时加力无效）× 推力滑翔系数 */
 function curSpeed() {
-  return CFG.speed * (1 + G.boost * (BOOST_MULT - 1));
+  const thr = G.thrust;
+  const boostMul = 1 + G.boost * (BOOST_MULT - 1) * thr;
+  return CFG.speed * boostMul * (CUT_GLIDE + (1 - CUT_GLIDE) * thr);
+}
+
+/* =========================================================
+   视角锁定（R）：锁定面向屏幕中心最近的单位；锁定后相机改为
+   “目标视线稳定系”——与机身姿态（WASD 滚转 / 俯仰 / 偏航）完全解耦：
+   相机取在机身沿目标方向后方 30、稳定系上方 9.5（不引用任何机身姿态向量），
+   视线每帧精确注视目标；机身位移仍带动相机平滑跟拍。再按 R 解除。
+========================================================= */
+const lockMarkEl = document.getElementById('lockMark');
+const _lockPos = new THREE.Vector3();
+const lockCamPos = new THREE.Vector3();     // 锁定相机位置（稳定系；updateLock 每帧重建）
+const lockCamLook = new THREE.Vector3();    // 锁定相机注视点（= 目标点 → 目标恒居画面正中）
+
+function lockUnitPos(L, out) {
+  out.copy(L.u.mesh.position);
+  out.y += L.up;
+  return out;
+}
+
+function findLockTarget() {
+  _u1.set(0, 0, -1).applyQuaternion(camera.quaternion);   // 相机前向
+  let best = null, bestD = 1e9;
+  const consider = (unit, up) => {
+    if (!unit || unit.dead) return;
+    _u2.copy(unit.mesh.position);
+    _u2.y += up;
+    if (_u2.distanceToSquared(camera.position) > 2600 * 2600) return;
+    _u3.subVectors(_u2, camera.position).normalize();
+    if (_u3.dot(_u1) < 0.1) return;                       // 需在视野前方
+    _u3.copy(_u2).project(camera);
+    const d = Math.hypot(_u3.x, _u3.y);
+    if (d < bestD) { bestD = d; best = { u: unit, up }; }
+  };
+  for (const e of enemies) consider(e, 0);
+  for (const w of wingmen) consider(w, 0);
+  for (const g of aaaGuns) consider(g, 5);
+  for (const s of samSites) consider(s, 16);
+  return best;
+}
+
+function toggleLock() {
+  if (!G.started || G.over || G.crashing) return;
+  if (G.lockTarget) {                                     // 再按 R：解除（相机平滑交还鼠标视角）
+    G.lockTarget = null;
+    lockMarkEl.style.display = 'none';
+    return;
+  }
+  const t = findLockTarget();
+  if (t) G.lockTarget = t;
+}
+
+function updateLock(dt) {
+  const L = G.lockTarget;
+  if (!L) return;
+  if (L.u.dead) {                                         // 目标被摧毁：自动解除
+    G.lockTarget = null;
+    lockMarkEl.style.display = 'none';
+    return;
+  }
+
+  /* 稳定系首轴：机身→目标的世界方向（不含任何机身姿态量） */
+  lockUnitPos(L, _lockPos);
+  _u1.subVectors(_lockPos, plane.position).normalize();
+  _u2.crossVectors(_u1, _worldUp);
+  if (_u2.lengthSq() < 1e-6) _u2.set(1, 0, 0);            // 目标近乎正上 / 正下时的退化保护
+  _u2.normalize();
+  _u3.crossVectors(_u2, _u1).normalize();                 // 稳定系“上”方向
+
+  /* 相机：机身沿目标方向后方 30、稳定系上方 9.5；视线精确注视目标点 */
+  lockCamPos.copy(plane.position).addScaledVector(_u1, -30).addScaledVector(_u3, 9.5);
+  const camGround = terrainHeight(lockCamPos.x, lockCamPos.z) + 9;
+  if (lockCamPos.y < camGround) lockCamPos.y = camGround;
+  lockCamLook.copy(_lockPos);
+
+  /* 锁定标记：视线即目标方向，标记恒在画面正中（CSS 已锚定 left / top 50%） */
+  lockMarkEl.style.display = 'block';
 }
 
 function updateCamera(dt) {
-  const fwd = getForward().clone();
+  if (G.lockTarget) {
+    /* 锁定期间：相机由“目标视线稳定系”（updateLock 每帧重建）刚性接管，
+       与机身姿态完全解耦——WASD 滚转 / 俯仰 / 偏航不再影响取景 */
+    if (!camInit) {
+      camera.position.copy(lockCamPos);
+      camLook.copy(lockCamLook);
+      camInit = true;
+    }
+    camera.position.copy(lockCamPos);
+    camLook.copy(lockCamLook);
+  } else {
+    const fwd = getForward().clone();
 
-  _right.crossVectors(fwd, _worldUp);
-  if (_right.lengthSq() < 0.0001) _right.set(1, 0, 0);
-  _right.normalize();
-  _up.crossVectors(_right, fwd).normalize();
+    _right.crossVectors(fwd, _worldUp);
+    if (_right.lengthSq() < 0.0001) _right.set(1, 0, 0);
+    _right.normalize();
+    _up.crossVectors(_right, fwd).normalize();
 
-  const camPos = plane.position.clone()
-    .addScaledVector(fwd, -30)
-    .addScaledVector(_up, 9.5);
+    const camPos = plane.position.clone()
+      .addScaledVector(fwd, -30)
+      .addScaledVector(_up, 9.5);
 
-  const lookAt = plane.position.clone()
-    .addScaledVector(fwd, 15)
-    .addScaledVector(_up, 2.5);
+    const lookAt = plane.position.clone()
+      .addScaledVector(fwd, 15)
+      .addScaledVector(_up, 2.5);
 
-  // 应用视角偏移（围绕飞机旋转）
-  if (camYawOff !== 0 || camPitchOff !== 0) {
-    _tmpEuler.set(camPitchOff, camYawOff, 0, 'YXZ');
-    _tmpQuat.setFromEuler(_tmpEuler);
+    // 应用视角偏移（围绕飞机旋转）
+    if (camYawOff !== 0 || camPitchOff !== 0) {
+      _tmpEuler.set(camPitchOff, camYawOff, 0, 'YXZ');
+      _tmpQuat.setFromEuler(_tmpEuler);
 
-    _tmpVec.copy(camPos).sub(plane.position).applyQuaternion(_tmpQuat).add(plane.position);
-    camPos.copy(_tmpVec);
+      _tmpVec.copy(camPos).sub(plane.position).applyQuaternion(_tmpQuat).add(plane.position);
+      camPos.copy(_tmpVec);
 
-    _tmpVec.copy(lookAt).sub(plane.position).applyQuaternion(_tmpQuat).add(plane.position);
-    lookAt.copy(_tmpVec);
+      _tmpVec.copy(lookAt).sub(plane.position).applyQuaternion(_tmpQuat).add(plane.position);
+      lookAt.copy(_tmpVec);
+    }
+
+    const camGround = terrainHeight(camPos.x, camPos.z) + 9;
+    if (camPos.y < camGround) camPos.y = camGround;
+
+    if (!camInit) {
+      camera.position.copy(camPos);
+      camLook.copy(lookAt);
+      camInit = true;
+    }
+
+    camera.position.lerp(camPos, 1 - Math.exp(-8 * dt));
+    camLook.lerp(lookAt, 1 - Math.exp(-11 * dt));
   }
-
-  const camGround = terrainHeight(camPos.x, camPos.z) + 9;
-  if (camPos.y < camGround) camPos.y = camGround;
-
-  if (!camInit) {
-    camera.position.copy(camPos);
-    camLook.copy(lookAt);
-    camInit = true;
-  }
-
-  camera.position.lerp(camPos, 1 - Math.exp(-8 * dt));
-  camLook.lerp(lookAt, 1 - Math.exp(-11 * dt));
   camera.lookAt(camLook);
 
   /* 加力：视野拉伸 + 轻微抖动，强化速度感 */
@@ -1319,7 +2721,7 @@ function updateCamera(dt) {
     camera.fov = fovT;
     camera.updateProjectionMatrix();
   }
-  if (G.boost > 0.02) {
+  if (G.boost > 0.02 && !G.lockTarget) {
     const bj = G.boost * 0.6;
     camera.position.x += (Math.random() - 0.5) * bj;
     camera.position.y += (Math.random() - 0.5) * bj;
@@ -1327,44 +2729,76 @@ function updateCamera(dt) {
 
   if (G.shake > 0.001) {
     const s = G.shake;
-    camera.position.x += (Math.random() - 0.5) * s * 1.6;
-    camera.position.y += (Math.random() - 0.5) * s * 1.6;
-    camera.position.z += (Math.random() - 0.5) * s * 1.6;
+    if (!G.lockTarget) {
+      camera.position.x += (Math.random() - 0.5) * s * 1.6;
+      camera.position.y += (Math.random() - 0.5) * s * 1.6;
+      camera.position.z += (Math.random() - 0.5) * s * 1.6;
+    }
     G.shake -= dt * 7;
     if (G.shake < 0) G.shake = 0;
   }
 }
 
 /* =========================================================
-   落点预测（长按投弹才显示，大小与爆炸半径一致）
+   投弹落点预测（长按右键显示）：按与 dropBomb 完全一致的真实弹道
+   （挂点偏移 13 / 初速 −8 / 逐帧重力）积分到着地面，在落点上平铺
+   红色预瞄图标（与地面平行，机炮准星同款元素）
 ========================================================= */
+const _aimN = new THREE.Vector3();
+
+/* 炸弹着地面：地形与水面（WATER_LEVEL）取高者，爆炸判定与本函数共用 */
+function bombSurfaceY(x, z) {
+  return Math.max(terrainHeight(x, z), WATER_LEVEL);
+}
+
+/* 地表法线（中心差分；限幅约 40° 内，保证图标始终可读） */
+function terrainNormal(x, z, out) {
+  const e = 6;
+  const hx = terrainHeight(x + e, z) - terrainHeight(x - e, z);
+  const hz = terrainHeight(x, z + e) - terrainHeight(x, z - e);
+  out.set(-hx, 2 * e, -hz).normalize();
+  if (out.y < 0.77) { out.y = 0.77; out.normalize(); }
+  return out;
+}
+
 function updateAim() {
   if (!G.aiming) {
-    if (aimRing.visible) aimRing.visible = false;
+    if (bombMark.visible) bombMark.visible = false;
     return;
   }
 
-  const p = plane.position.clone();
-  const v = getForward().clone().multiplyScalar(curSpeed());
-  const step = 0.1;
-  let hit = null;
+  /* 与 dropBomb 完全相同的出弹状态 */
+  const fwd = getForward();
+  const p = plane.position.clone().addScaledVector(fwd, 13);
+  p.y -= 4;
+  const v = fwd.clone().multiplyScalar(curSpeed());
+  v.y -= 8;
 
-  for (let i = 0; i < 260; i++) {
+  /* 逐步积分（步长 1/60，与逐帧炸弹一致）到着地面 */
+  const step = 1 / 60;
+  let hit = null;
+  for (let i = 0; i < 3600; i++) {
     v.y -= CFG.gravity * step;
     p.addScaledVector(v, step);
-    const gh = terrainHeight(p.x, p.z);
-    if (p.y <= gh) { hit = p.clone(); hit.y = gh; break; }
+    const sy = bombSurfaceY(p.x, p.z);
+    if (p.y <= sy) { hit = p; hit.y = sy; break; }
   }
 
-  if (hit) {
-    aimRing.visible = true;
-    aimRing.position.set(hit.x, hit.y + 5, hit.z);
-    aimRing.scale.setScalar(1);
-    const pulse = 0.62 + 0.32 * Math.sin(performance.now() * 0.008);
-    aimRing.material.opacity = pulse;
-  } else {
-    aimRing.visible = false;
-  }
+  if (!hit) { bombMark.visible = false; return; }
+
+  /* 姿态：水面取水平；坡面贴合地表；沿法线抬升一点，避免插进地形 */
+  const gh = terrainHeight(hit.x, hit.z);
+  if (hit.y > gh + 0.05) _aimN.set(0, 1, 0);
+  else terrainNormal(hit.x, hit.z, _aimN);
+
+  bombMark.visible = true;
+  bombMark.position.copy(hit).addScaledVector(_aimN, 1.6);
+  bombMark.quaternion.setFromUnitVectors(_worldUp, _aimN);
+
+  /* 大小随视距缩放（保持屏幕识别度），透明度闪烁 */
+  const dist = camera.position.distanceTo(hit);
+  bombMark.scale.setScalar(Math.max(3, Math.min(60, dist * 0.035)));
+  bombMark.userData.mat.opacity = 0.6 + 0.3 * Math.sin(performance.now() * 0.01);
 }
 
 /* =========================================================
@@ -1437,7 +2871,10 @@ function startCrash() {
   G.crashing = true;
   G.crashTime = 0;
   G.aiming = false;
+  G.lockTarget = null;
+  lockMarkEl.style.display = 'none';
   if (gunReticle) gunReticle.visible = false;
+  if (bombMark) bombMark.visible = false;
   Sound.silenceEngine();
   Sound.boom(1.0);
   spawnExplosion(plane.position.clone(), 1.8);
@@ -1480,7 +2917,9 @@ function updateCrash(dt) {
 const hudScore     = document.getElementById('hudScore');
 const hudDestroyed = document.getElementById('hudDestroyed');
 const hudAlt       = document.getElementById('hudAlt');
-let lastScore = -1, lastDestroyed = -1, lastAlt = -1;
+const hpFill       = document.getElementById('hpFill');
+const dmgFlash     = document.getElementById('dmgFlash');
+let lastScore = -1, lastDestroyed = -1, lastAlt = -1, lastHp = -1;
 
 function updateHUD() {
   const gh = terrainHeight(plane.position.x, plane.position.z);
@@ -1490,6 +2929,13 @@ function updateHUD() {
   if (G.destroyed !== lastDestroyed) {
     hudDestroyed.textContent = G.destroyed; lastDestroyed = G.destroyed;
   }
+  const hpPct = Math.max(0, G.hp / G.hpMax);
+  if (hpPct !== lastHp) {
+    hpFill.style.width = (hpPct * 100).toFixed(1) + '%';
+    hpFill.style.background = hpPct > 0.6 ? '#5ee06a' : (hpPct > 0.3 ? '#ffd24d' : '#ff5a45');
+    lastHp = hpPct;
+  }
+  dmgFlash.style.opacity = G.hitFlash;
 }
 
 /* =========================================================
@@ -1498,7 +2944,8 @@ function updateHUD() {
 function resetPlane() {
   plane.position.set(700, 520, 1800);
   plane.quaternion.identity();
-  plane.lookAt(700, 380, 0);
+  /* lookAt 对非相机对象是 +Z 朝向目标（机头在 -Z）：取镜像点，让机头指向地图内侧 (700,380,0) */
+  plane.lookAt(700, 660, 3600);
   camInit = false;
   camYawOff = 0;
   camPitchOff = 0;
@@ -1530,6 +2977,23 @@ function startGame() {
 
   createCity();
 
+  /* 重置并重新布防敌方单位 */
+  for (const g of aaaGuns) scene.remove(g.mesh);
+  aaaGuns.length = 0;
+  for (const s of samSites) scene.remove(s.mesh);
+  samSites.length = 0;
+  for (const en of enemies) scene.remove(en.mesh);
+  enemies.length = 0;
+  for (const eb of eBullets) scene.remove(eb.mesh);
+  eBullets.length = 0;
+  for (const ms of missiles) scene.remove(ms.mesh);
+  missiles.length = 0;
+  for (const w of wingmen) scene.remove(w.mesh);
+  wingmen.length = 0;
+  wingRespawn[0] = wingRespawn[1] = 0;
+  createDefenses();
+  enemyTimer = 6;
+
   plane.visible = true;
   resetPlane();
 
@@ -1542,6 +3006,13 @@ function startGame() {
   G.fireTimer = 0;
   G.shake = 0;
   G.boost = 0;
+  G.hp = G.hpMax;
+  G.invuln = 0;
+  G.hitFlash = 0;
+  G.engCut = false;
+  G.thrust = 1;
+  G.lockTarget = null;
+  lockMarkEl.style.display = 'none';
   gunReticle.visible = false;
 
   Sound.init();
@@ -1560,7 +3031,7 @@ function showGameOver() {
     '<h1>坠机了</h1>' +
     '<div class="sub">AIRCRAFT DESTROYED</div>' +
     '<div class="bigscore">' + G.score + '</div>' +
-    '<p>击毁建筑 ' + G.destroyed + ' 栋<br>嘛……主人，下次小心点嘛。</p>' +
+    '<p>击毁敌方单位 ' + G.destroyed + ' 个<br>嘛……下次小心点嘛。</p>' +
     '<button id="startBtn">再来一次</button>';
   overlay.classList.remove('hide');
   document.getElementById('startBtn').addEventListener('click', onStartClick);
@@ -1583,6 +3054,14 @@ function update(dt) {
   /* 加力（左Shift）：平滑升降，供速度 / 尾焰 / 引擎声共用 */
   G.boost += ((keys.boost ? 1 : 0) - G.boost) * (1 - Math.exp(-9 * dt));
 
+  /* 关车推力（长按 Space）：平滑升降，供减速（curSpeed）与低头下坠共用 */
+  G.thrust += ((keys.engineCut ? 0 : 1) - G.thrust) *
+              (1 - Math.exp(-(keys.engineCut ? CUT_SPOOL_DN : CUT_SPOOL_UP) * dt));
+
+  /* 受击无敌帧与红屏衰减 */
+  if (G.invuln > 0) G.invuln -= dt;
+  if (G.hitFlash > 0) G.hitFlash = Math.max(0, G.hitFlash - dt * 2.2);
+
   const rollIn  = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
   const pitchIn = (keys.up   ? 1 : 0) - (keys.down  ? 1 : 0);
 
@@ -1595,6 +3074,11 @@ function update(dt) {
     const rightV = new THREE.Vector3(1, 0, 0).applyQuaternion(plane.quaternion);
     const rollAngle = Math.atan2(rightV.y, Math.hypot(rightV.x, rightV.z));
     plane.rotateZ(-rollAngle * 1.8 * dt);
+  }
+
+  /* 关车下坠：推力丧失越多机头越快下沉，收敛约 -20° 下滑角（可按 W 对抗拉起） */
+  if (G.thrust < 0.999 && getForward().y > CUT_SINK_MAX) {
+    plane.rotateX(-CUT_SINK_RATE * (1 - G.thrust) * dt);
   }
 
   /* 前进（加力时提速） */
@@ -1622,22 +3106,32 @@ function update(dt) {
   checkPlaneCollision();
   if (G.crashing) { updateEffects(dt); updateCamera(dt); updateHUD(); return; }
 
-  /* 尾焰（加力时向后拉长、更亮、偏白；根部锚定喷口，避免拉长时穿入机身） */
+  /* 尾焰（加力时向后拉长、更亮、偏白；长按 Space 关闭发动机时熄火） */
   const flame = plane.userData.flame;
   if (flame) {
-    const bs = G.boost;
-    const sw = (0.85 + Math.random() * 0.42) * (1 + bs * 0.3);   // 宽度
-    const sh = sw * (0.85 + Math.random() * 0.55);               // 高度
-    const kz = sw * (1 + bs * 1.9);                              // 长度（scale.y 对应世界 Z 向）
-    flame.scale.set(sw, kz, sh);
-    flame.position.z = 5.95 + 1.4 * kz;                          // 根部固定在喷口内，只向后延伸
-    flame.material.opacity = Math.min(1, 0.45 + Math.random() * 0.45 + bs * 0.4);
-    flame.material.color.setRGB(0.5 + bs * 0.42, 0.88 + bs * 0.08, 1);
+    if (keys.engineCut) {
+      flame.visible = false;
+    } else {
+      flame.visible = true;
+      const bs = G.boost;
+      const sw = (0.85 + Math.random() * 0.42) * (1 + bs * 0.3);   // 宽度
+      const sh = sw * (0.85 + Math.random() * 0.55);               // 高度
+      const kz = sw * (1 + bs * 1.9);                              // 长度（scale.y 对应世界 Z 向）
+      flame.scale.set(sw, kz, sh);
+      flame.position.z = 5.95 + 1.4 * kz;                          // 根部固定在喷口内，只向后延伸
+      flame.material.opacity = Math.min(1, 0.45 + Math.random() * 0.45 + bs * 0.4);
+      flame.material.color.setRGB(0.5 + bs * 0.42, 0.88 + bs * 0.08, 1);
+    }
   }
 
-  /* 引擎音（加力时更响、更低沉、更震撼） */
+  /* 引擎音（加力时更响、更低沉、更震撼；长按 Space 关闭发动机则静音） */
   const engInt = 0.5 + (keys.up ? 0.18 : 0) - (keys.down ? 0.16 : 0);
-  Sound.setEngine(Math.max(0.25, Math.min(1, engInt)), G.boost);
+  if (keys.engineCut) {
+    if (!G.engCut) { G.engCut = true; Sound.silenceEngine(); }
+  } else {
+    G.engCut = false;
+    Sound.setEngine(Math.max(0.25, Math.min(1, engInt)), G.boost);
+  }
 
   /* 开火 */
   if (G.fireTimer > 0) G.fireTimer -= dt;
@@ -1648,6 +3142,13 @@ function update(dt) {
 
   /* 子弹 */
   updateBullets(dt);
+
+  /* 敌方单位（防空机枪 / 导弹阵地 / 敌机 / 弹幕） */
+  updateAAA(dt);
+  updateSAM(dt);
+  updateEnemies(dt);
+  updateWingmen(dt);
+  updateThreats(dt);
 
   /* 炸弹 */
   for (let i = bombs.length - 1; i >= 0; i--) {
@@ -1665,7 +3166,7 @@ function update(dt) {
       spawnSmoke(b.mesh.position.clone(), 1.9, false);
     }
 
-    const bgh = terrainHeight(b.mesh.position.x, b.mesh.position.z);
+    const bgh = bombSurfaceY(b.mesh.position.x, b.mesh.position.z);
     if (b.mesh.position.y <= bgh) {
       b.mesh.position.y = bgh;
       onBombImpact(b.mesh.position.clone());
@@ -1682,7 +3183,8 @@ function update(dt) {
   /* 特效 */
   updateEffects(dt);
 
-  /* 相机 / 瞄准 */
+  /* 视角锁定 / 相机 / 瞄准 */
+  updateLock(dt);
   updateCamera(dt);
   updateAim();
   updateGunAim();
@@ -1724,18 +3226,30 @@ function init() {
   scene.add(plane);
   resetPlane();
 
-  /* 预瞄环 —— 半径和炸弹爆炸半径完全一致 */
-  aimRing = new THREE.Mesh(
-    new THREE.RingGeometry(BOMB_RADIUS * 0.80, BOMB_RADIUS, 56),
-    new THREE.MeshBasicMaterial({
-      color: 0xff4433, transparent: true, opacity: 0.85,
-      side: THREE.DoubleSide, depthTest: false, depthWrite: false
-    })
-  );
-  aimRing.rotation.x = -Math.PI / 2;
-  aimRing.renderOrder = 999;
-  aimRing.visible = false;
-  scene.add(aimRing);
+  /* 投弹落点图标 —— 红色、与地面平行（机炮准星同款元素拍平），由 updateAim 定位 */
+  bombMark = new THREE.Group();
+  const aimMat = new THREE.MeshBasicMaterial({
+    color: 0xff4433, transparent: true, opacity: 0.8,
+    side: THREE.DoubleSide, depthWrite: false
+  });
+  const markRing = new THREE.Mesh(new THREE.RingGeometry(0.72, 0.86, 28), aimMat);
+  markRing.rotation.x = -Math.PI / 2;                  // 圆环拍平贴地
+  bombMark.add(markRing);
+  const markBarH = new THREE.BoxGeometry(0.6, 0.05, 0.085);
+  const markBarV = new THREE.BoxGeometry(0.085, 0.05, 0.6);
+  [-1, 1].forEach(s => {
+    const bh = new THREE.Mesh(markBarH, aimMat);
+    bh.position.x = s * 1.25;
+    bombMark.add(bh);
+    const bv = new THREE.Mesh(markBarV, aimMat);
+    bv.position.z = s * 1.25;
+    bombMark.add(bv);
+  });
+  bombMark.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.15), aimMat));
+  bombMark.traverse(o => { o.renderOrder = 999; });
+  bombMark.userData.mat = aimMat;
+  bombMark.visible = false;
+  scene.add(bombMark);
 
   /* 机炮准星：按住左键扫射时显示在弹着点 */
   gunReticle = new THREE.Group();

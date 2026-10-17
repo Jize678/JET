@@ -39,7 +39,7 @@
            background:radial-gradient(circle at 50% 40%,rgba(40,90,150,.72),rgba(6,16,32,.92));
            backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:20px}
   #overlay.hide{display:none}
-  .panel{width:100%;max-width:380px;text-align:center;color:#eaf4ff;
+  .panel{width:100%;max-width:420px;max-height:94vh;overflow:auto;text-align:center;color:#eaf4ff;
          background:rgba(12,28,52,.72);border:1px solid rgba(120,200,255,.3);
          border-radius:22px;padding:28px 22px;
          box-shadow:0 20px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.12)}
@@ -56,6 +56,25 @@
     background:linear-gradient(135deg,#7fdcff,#b9f0ff 45%,#ffd9a0);
     box-shadow:0 8px 26px rgba(110,220,255,.4);transition:transform .1s}
   .panel button:active{transform:scale(.97)}
+  .panel button.ghost{background:rgba(255,255,255,.12);color:#cfe6ff;
+         border:1px solid rgba(255,255,255,.25);box-shadow:none;margin-top:10px}
+  .panel button.mini{width:auto;padding:7px 11px;font-size:12px;font-weight:600;letter-spacing:0;
+         border-radius:9px;background:rgba(255,255,255,.13);color:#eaf4ff;
+         border:1px solid rgba(255,255,255,.22);box-shadow:none}
+  .mapui{margin-bottom:14px;text-align:left}
+  .mrow{display:flex;gap:7px;align-items:center;margin:8px 0}
+  .mrow input{flex:1;min-width:0;padding:9px 10px;border-radius:10px;font-size:13px;letter-spacing:0;
+         border:1px solid rgba(255,255,255,.22);background:rgba(0,0,0,.3);color:#eaf4ff;outline:none}
+  #mapCanvas{width:100%;height:auto;aspect-ratio:1/1;border-radius:12px;
+         border:1px solid rgba(255,255,255,.2);background:#04101c;
+         cursor:crosshair;touch-action:none;display:block}
+  .mapHint{font-size:11px;opacity:.62;margin:6px 2px;line-height:1.6}
+  .mrow .ulabel{font-size:12px;opacity:.82}
+  .mrow .ucount{min-width:20px;text-align:center;font-variant-numeric:tabular-nums;font-size:13px;font-weight:700}
+  .keysWrap{margin-bottom:16px;font-size:12px;text-align:left}
+  .keysWrap summary{cursor:pointer;opacity:.72;padding:6px 2px;user-select:none}
+  .keysWrap[open] summary{margin-bottom:8px}
+  .keys{margin-bottom:0}
   .bigscore{font-size:38px;font-weight:800;color:#ffd98a;margin:6px 0 16px;
             font-variant-numeric:tabular-nums}
 </style>
@@ -110,7 +129,7 @@ const CFG = {
   bombCD:     0.6,
   fireCD:     0.085,
   bulletSpd:  560,
-  mapHalf:    1850,
+  mapHalf:    3700,
   ceil:       1500,
   planeR:     6
 };
@@ -119,8 +138,6 @@ const BOOST_MULT = 2.0;        // 左Shift 加力倍率（速度、尾焰、引�
 
 const GUN_KILL_HITS = 10;      // 机枪命中 10 次摧毁建筑
 const BOMB_RADIUS   = 195;     // 炸弹爆炸半径
-
-const WATER_LEVEL = 4;
 
 /* 关车（长按 Space）动力学：推力回落 → 减速 + 低头下坠 */
 const CUT_GLIDE     = 0.55;    // 滑翔速度下限（相对巡航；实际速度按 G.thrust 平滑过渡）
@@ -391,60 +408,224 @@ const Sound = {
 };
 
 /* =========================================================
-   工具
+   世界生成（种子驱动 · Minecraft 式分层噪声）
+   分层顺序：基础起伏 → 山脉 → 河流 → 湖泊 → 城市整平 → 出生地整平
+   —— GEN-BLOCK-START ——（保持纯函数；外部校验脚本整段抽取）
 ========================================================= */
+const WORLD_HALF = 4400;             // 地形网格半径（世界 8800×8800）
+const SPAWN_X = 0, SPAWN_Z = 3550;   // 固定出生点：南侧边缘（朝北进场）
+const WATER_LEVEL = 4;
+
 function smoothstep(e0, e1, x) {
   let t = (x - e0) / (e1 - e0);
   t = Math.min(1, Math.max(0, t));
   return t * t * (3 - 2 * t);
 }
 
-/* =========================================================
-   地形
-========================================================= */
+/* ---- 种子与噪声（确定性哈希 / 值噪声 / 分形叠加） ---- */
+function hashStr(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function mulberry32(a) {
+  let t = a >>> 0;
+  return function () {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash2i(ix, iz, seed) {
+  let h = Math.imul(ix | 0, 374761393) + Math.imul(iz | 0, 668265263) + Math.imul(seed | 0, 1442695041);
+  h ^= h >>> 13;
+  h = Math.imul(h, 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, z, seed) {
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const fx = x - ix, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz);
+  const a = hash2i(ix, iz, seed), b = hash2i(ix + 1, iz, seed);
+  const c = hash2i(ix, iz + 1, seed), d = hash2i(ix + 1, iz + 1, seed);
+  const top = a + (b - a) * ux, bot = c + (d - c) * ux;
+  return top + (bot - top) * uz;
+}
+function fbm(x, z, seed, oct) {
+  let v = 0, amp = 0.5, tot = 0;
+  for (let i = 0; i < oct; i++) {
+    v += vnoise(x, z, seed + i * 131) * amp;
+    tot += amp;
+    amp *= 0.5;
+    x *= 2.03; z *= 1.97;
+  }
+  return v / tot;
+}
+
+/* ---- 当前世界参数（由种子生成；terrainHeight 全程只读 GEN） ---- */
+let GEN = null;
+
+function genWorld(seedNum) {
+  const rng = mulberry32(seedNum);
+  const g = { seed: seedNum >>> 0, mountains: [], cities: [], rivers: [], lakes: [] };
+
+  /* 山脉：1~2 条（椭圆掩码 + 内部细节噪声；预存旋转三角） */
+  const mCount = 1 + (rng() < 0.45 ? 1 : 0);
+  for (let i = 0; i < mCount; i++) {
+    for (let t = 0; t < 90; t++) {
+      const mx = (rng() * 2 - 1) * WORLD_HALF * 0.7;
+      const mz = (rng() * 2 - 1) * WORLD_HALF * 0.7;
+      if (Math.hypot(mx - SPAWN_X, mz - SPAWN_Z) < 1600) continue;
+      const mrx = 950 + rng() * 800, mrz = 620 + rng() * 600;
+      let ok = true;
+      for (const m of g.mountains) {
+        if (Math.hypot(mx - m.x, mz - m.z) < (m.mrx + mrx) * 0.8) { ok = false; break; }
+      }
+      if (!ok) continue;
+      const rot = rng() * Math.PI;
+      g.mountains.push({
+        x: mx, z: mz, rot, cr: Math.cos(rot), sr: Math.sin(rot), mrx, mrz,
+        amp: 450 + rng() * 450,
+        f1: 0.0042 + rng() * 0.0016, p1: rng() * 6.283,
+        f2: 0.0095 + rng() * 0.0030, p2: rng() * 6.283
+      });
+      break;
+    }
+  }
+
+  /* 城市：1~2 座（单座大小 1~3 倍随机等比缩放；以 RX 620 / RZ 600 为 1 倍参考） */
+  const cCount = rng() < 0.5 ? 1 : 2;
+  for (let i = 0; i < cCount; i++) {
+    for (let t = 0; t < 240; t++) {
+      const cs = 1 + rng() * 2;                       // 1~3 倍
+      const rx = 620 * cs, rz = 600 * cs;
+      const cx = (rng() * 2 - 1) * Math.max(250, WORLD_HALF - rx - 250);
+      const cz = (rng() * 2 - 1) * Math.max(250, WORLD_HALF - rz - 250);
+      if (Math.hypot(cx - SPAWN_X, cz - SPAWN_Z) < rx + 1000) continue;
+      let ok = true;
+      for (const c of g.cities) if (Math.hypot(cx - c.x, cz - c.z) < c.rx * 0.9 + rx * 0.9 + 900) { ok = false; break; }
+      for (const m of g.mountains) if (Math.hypot(cx - m.x, cz - m.z) < m.mrx * 0.8 + rx * 0.7 + 500) { ok = false; break; }
+      if (!ok) continue;
+      g.cities.push({ x: cx, z: cz, rx, rz, s: cs });
+      break;
+    }
+  }
+  if (g.cities.length === 0) g.cities.push({ x: 0, z: 0, rx: 620, rz: 600, s: 1 });   // 兜底（极少数种子）
+
+  /* 河流：1~2 条（正弦叠加中心线；避开城市与出生地） */
+  const rCount = 1 + (rng() < 0.38 ? 1 : 0);
+  for (let i = 0; i < rCount; i++) {
+    for (let t = 0; t < 80; t++) {
+      const rv = {
+        dir: rng() < 0.5 ? 'z' : 'x',
+        base: (rng() * 2 - 1) * WORLD_HALF * 0.5,
+        a1: 120 + rng() * 260, f1: 0.0011 + rng() * 0.0018, ph1: rng() * 6.283,
+        a2: 60 + rng() * 150, f2: 0.00035 + rng() * 0.0008, ph2: rng() * 6.283,
+        w: 46 + rng() * 18
+      };
+      let ok = true;
+      for (let k = 0; k <= 40 && ok; k++) {
+        const c = -WORLD_HALF + 2 * WORLD_HALF * k / 40;
+        const off = rv.base + Math.sin(c * rv.f1 + rv.ph1) * rv.a1 + Math.sin(c * rv.f2 + rv.ph2) * rv.a2;
+        const px = rv.dir === 'z' ? off : c;
+        const pz = rv.dir === 'z' ? c : off;
+        if (Math.hypot(px - SPAWN_X, pz - SPAWN_Z) < 700) ok = false;
+        for (const ct of g.cities) {
+          if (Math.abs(px - ct.x) < ct.rx + 220 && Math.abs(pz - ct.z) < ct.rz + 220) ok = false;
+        }
+      }
+      if (!ok) continue;
+      g.rivers.push(rv);
+      break;
+    }
+  }
+
+  /* 湖泊：0~2 个（谐波岸线；避开城市与出生地） */
+  const lCount = rng() < 0.22 ? 0 : (rng() < 0.75 ? 1 : 2);
+  for (let i = 0; i < lCount; i++) {
+    for (let t = 0; t < 90; t++) {
+      const lx = (rng() * 2 - 1) * WORLD_HALF * 0.85;
+      const lz = (rng() * 2 - 1) * WORLD_HALF * 0.85;
+      if (Math.hypot(lx - SPAWN_X, lz - SPAWN_Z) < 1000) continue;
+      let ok = true;
+      for (const ct of g.cities) {
+        if (Math.abs(lx - ct.x) < ct.rx + 260 && Math.abs(lz - ct.z) < ct.rz + 260) ok = false;
+      }
+      for (const l of g.lakes) if (Math.hypot(lx - l.x, lz - l.z) < 900) ok = false;
+      if (!ok) continue;
+      g.lakes.push({
+        x: lx, z: lz, r: 260 + rng() * 160,
+        h1a: 0.10 + rng() * 0.10, h1p: rng() * 6.283,
+        h2a: 0.05 + rng() * 0.08, h2p: rng() * 6.283
+      });
+      break;
+    }
+  }
+  return g;
+}
+
+/* ---- 地形高度（分层叠加，逐层由种子参数驱动） ---- */
 function terrainHeight(x, z) {
-  let h = 70;
-  h += Math.sin(x * 0.0015) * Math.cos(z * 0.0012) * 30;
-  h += Math.sin(x * 0.0038 + 1.7) * 13;
-  h += Math.cos(z * 0.0031 - 0.9) * 15;
-  h += Math.sin((x + z) * 0.0006) * 22;
+  const g = GEN;
+  let h = 70 + (fbm(x * 0.00055, z * 0.00055, g.seed ^ 0x9E37, 3) - 0.5) * 130;
+  h += (vnoise(x * 0.0021, z * 0.0021, g.seed ^ 0x51ED) - 0.5) * 16;
 
-  const mdx = (x + 1250) / 900;
-  const mdz = (z + 950) / 820;
-  const md = Math.hypot(mdx, mdz);
-  const mtnMask = Math.max(0, 1 - md);
-  const mm = mtnMask * mtnMask * (1 - mtnMask * 0.25);
-  h += mm * 620;
-  h += Math.sin(x * 0.0052 + 0.5) * Math.cos(z * 0.0046 - 1.2) * mm * 210;
-  h += Math.sin(x * 0.011 + 2.1) * Math.cos(z * 0.0098) * mm * 60;
-
-  const cdx = (x - 700) / 640, cdz = (z - 40) / 620;
-  const cd = Math.hypot(cdx, cdz);
-  if (cd < 1.4) {
-    const w = smoothstep(1.4, 0.82, cd);
-    h = h * (1 - w) + 50 * w;
+  for (const m of g.mountains) {
+    const dx = x - m.x, dz = z - m.z;
+    const rx = m.cr * dx + m.sr * dz, rz = -m.sr * dx + m.cr * dz;
+    const md = Math.hypot(rx / m.mrx, rz / m.mrz);
+    if (md < 1) {
+      const mask = 1 - md;
+      const mm = mask * mask * (1 - mask * 0.25);
+      h += mm * m.amp;
+      h += Math.sin(x * m.f1 + m.p1) * Math.cos(z * m.f1 * 0.9 + m.p1 * 0.7) * mm * m.amp * 0.34;
+      h += Math.sin(x * m.f2 + m.p2) * Math.cos(z * m.f2 * 0.85) * mm * m.amp * 0.10;
+    }
   }
 
-  const rc = Math.sin(z * 0.0021) * 300 + Math.sin(z * 0.00075) * 220 - 120;
-  const rd = Math.abs(x - rc);
-  const rw = 52 + Math.sin(z * 0.009) * 10;
-  if (rd < rw * 2.9) {
-    const t = smoothstep(rw * 2.9, rw * 0.75, rd);
-    h = h * (1 - t) + (-24 + Math.sin(z * 0.008) * 4) * t;
+  for (const r of g.rivers) {
+    const c = r.dir === 'z' ? z : x;
+    const cen = r.base + Math.sin(c * r.f1 + r.ph1) * r.a1 + Math.sin(c * r.f2 + r.ph2) * r.a2;
+    const d = Math.abs((r.dir === 'z' ? x : z) - cen);
+    if (d < r.w * 2.9) {
+      const t = smoothstep(r.w * 2.9, r.w * 0.75, d);
+      h = h * (1 - t) + (-24 + Math.sin(c * 0.008) * 4) * t;
+    }
   }
 
-  const ldx = x + 620, ldz = z - 700;
-  const ld = Math.hypot(ldx, ldz);
-  const ang = Math.atan2(ldz, ldx);
-  const lr = 305 + Math.sin(ang * 3) * 48 + Math.sin(ang * 5 + 1.2) * 26;
-  if (ld < lr * 1.75) {
-    const t = smoothstep(lr * 1.75, lr * 0.55, ld);
-    h = h * (1 - t) + (-20 + Math.sin(ang * 4) * 3) * t;
+  for (const l of g.lakes) {
+    const dx = x - l.x, dz = z - l.z;
+    const d = Math.hypot(dx, dz);
+    const ang = Math.atan2(dz, dx);
+    const lr = l.r * (1 + Math.sin(ang * 3 + l.h1p) * l.h1a + Math.sin(ang * 5 + l.h2p) * l.h2a);
+    if (d < lr * 1.75) {
+      const t = smoothstep(lr * 1.75, lr * 0.55, d);
+      h = h * (1 - t) + (-20 + Math.sin(ang * 4) * 3) * t;
+    }
   }
 
+  for (const ct of g.cities) {
+    const cd = Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz);
+    if (cd < 1.4) {
+      const w = smoothstep(1.4, 0.82, cd);
+      h = h * (1 - w) + 50 * w;
+    }
+  }
+
+  const sd = Math.hypot(x - SPAWN_X, z - SPAWN_Z);
+  if (sd < 520) {
+    const w = smoothstep(520, 240, sd);
+    h = h * (1 - w) + 55 * w;
+  }
   return h;
 }
 
+/* ---- 地形配色（逐档锁定值） ---- */
 const STOPS = [
   { h: -30, c: [0.19, 0.25, 0.17] },
   { h:  2,  c: [0.42, 0.40, 0.27] },
@@ -477,8 +658,54 @@ function terrainColor(h, out) {
   out[0] = L[0]; out[1] = L[1]; out[2] = L[2];
 }
 
+/* ---- 地面单位自动布点（不落水 / 避城市与出生地 / 相互留距 / 太陡不选） ---- */
+function pickUnitSpot(minSep, others) {
+  const rng = mulberry32((GEN.seed ^ 0xDEF0) >>> 0);
+  for (let relax = 0; relax < 6; relax++) {
+    const sep = minSep * Math.pow(0.72, relax);
+    for (let t = 0; t < 1500; t++) {
+      const x = (rng() * 2 - 1) * (WORLD_HALF - 400);
+      const z = (rng() * 2 - 1) * (WORLD_HALF - 400);
+      if (terrainHeight(x, z) < WATER_LEVEL + 12) continue;
+      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 900) continue;
+      let ok = true;
+      for (const ct of GEN.cities) {
+        if (Math.abs(x - ct.x) < ct.rx + 150 && Math.abs(z - ct.z) < ct.rz + 150) { ok = false; break; }
+      }
+      if (!ok) continue;
+      const hs = [
+        terrainHeight(x, z), terrainHeight(x + 60, z), terrainHeight(x - 60, z),
+        terrainHeight(x, z + 60), terrainHeight(x, z - 60)
+      ];
+      if (Math.max(hs[0], hs[1], hs[2], hs[3], hs[4]) - Math.min(hs[0], hs[1], hs[2], hs[3], hs[4]) > 90) continue;
+      for (const p of others) if (Math.hypot(x - p.x, z - p.z) < sep) { ok = false; break; }
+      if (!ok) continue;
+      return { x, z };
+    }
+  }
+  return null;
+}
+
+function autoPlaceUnits(nAaa, nSam) {
+  const out = { aaa: [], sam: [] };
+  for (let i = 0; i < nAaa; i++) {
+    const p = pickUnitSpot(550, out.aaa.concat(out.sam));
+    if (!p) break;
+    out.aaa.push(p);
+  }
+  for (let i = 0; i < nSam; i++) {
+    const p = pickUnitSpot(650, out.aaa.concat(out.sam));
+    if (!p) break;
+    out.sam.push(p);
+  }
+  return out;
+}
+/* —— GEN-BLOCK-END —— */
+
+let worldTerrain = null, worldWater = null;
+
 function createTerrain() {
-  const SIZE = 4400, SEG = 200;
+  const SIZE = WORLD_HALF * 2, SEG = 400;      // 8800×8800，22m/格（保持原密度）
   const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
 
@@ -492,12 +719,15 @@ function createTerrain() {
     pos.setY(i, h);
     terrainColor(h, tmp);
 
-    const cdx = (x - 700) / 640, cdz = (z - 40) / 620;
-    if (Math.hypot(cdx, cdz) < 1.15) {
-      const w = smoothstep(1.15, 0.82, Math.hypot(cdx, cdz)) * 0.68;
-      tmp[0] = tmp[0] * (1 - w) + 0.40 * w;
-      tmp[1] = tmp[1] * (1 - w) + 0.41 * w;
-      tmp[2] = tmp[2] * (1 - w) + 0.42 * w;
+    /* 城市区域：水泥色地面 */
+    for (const ct of GEN.cities) {
+      const cd = Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz);
+      if (cd < 1.15) {
+        const w = smoothstep(1.15, 0.82, cd) * 0.68;
+        tmp[0] = tmp[0] * (1 - w) + 0.40 * w;
+        tmp[1] = tmp[1] * (1 - w) + 0.41 * w;
+        tmp[2] = tmp[2] * (1 - w) + 0.42 * w;
+      }
     }
 
     const n = (Math.sin(x * 0.31 + z * 0.27) * 0.5 + 0.5) * 0.06 - 0.03;
@@ -508,24 +738,25 @@ function createTerrain() {
 
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
+  worldTerrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  scene.add(worldTerrain);
 }
 
 function createWater() {
-  const geo = new THREE.PlaneGeometry(7000, 7000);
+  const geo = new THREE.PlaneGeometry(WORLD_HALF * 2 + 4200, WORLD_HALF * 2 + 4200);
   geo.rotateX(-Math.PI / 2);
   const mat = new THREE.MeshPhongMaterial({
     color: 0x2f6f9e, transparent: true, opacity: 0.82,
     shininess: 110, specular: 0x88ccff, depthWrite: false
   });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.y = WATER_LEVEL;
-  mesh.renderOrder = 1;
-  scene.add(mesh);
+  worldWater = new THREE.Mesh(geo, mat);
+  worldWater.position.y = WATER_LEVEL;
+  worldWater.renderOrder = 1;
+  scene.add(worldWater);
 }
 
 function createSky() {
-  const geo = new THREE.SphereGeometry(7000, 24, 16);
+  const geo = new THREE.SphereGeometry(15000, 24, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
     uniforms: {
@@ -549,54 +780,72 @@ function createSky() {
   scene.add(new THREE.Mesh(geo, mat));
 }
 
+let cloudAssets = null;
+const worldClouds = [];
 function createClouds() {
-  const mat = new THREE.MeshLambertMaterial({
-    color: 0xffffff, transparent: true, opacity: 0.78, depthWrite: false
-  });
-  const geo = new THREE.SphereGeometry(1, 8, 6);
-  for (let i = 0; i < 30; i++) {
+  if (!cloudAssets) {
+    cloudAssets = {
+      geo: new THREE.SphereGeometry(1, 8, 6),
+      mat: new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.78, depthWrite: false })
+    };
+  }
+  const rng = mulberry32((GEN.seed ^ 0xC10D) >>> 0);
+  for (let i = 0; i < 36; i++) {
     const cl = new THREE.Group();
-    const n = 3 + (Math.random() * 5 | 0);
+    const n = 3 + (rng() * 5 | 0);
     for (let j = 0; j < n; j++) {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set((Math.random()-0.5)*90, (Math.random()-0.5)*14, (Math.random()-0.5)*90);
-      m.scale.set(26 + Math.random()*38, 11 + Math.random()*15, 26 + Math.random()*38);
+      const m = new THREE.Mesh(cloudAssets.geo, cloudAssets.mat);
+      m.position.set((rng() - 0.5) * 90, (rng() - 0.5) * 14, (rng() - 0.5) * 90);
+      m.scale.set(26 + rng() * 38, 11 + rng() * 15, 26 + rng() * 38);
       cl.add(m);
     }
-    cl.position.set((Math.random()-0.5)*4000, 400 + Math.random()*560, (Math.random()-0.5)*4000);
+    cl.position.set((rng() - 0.5) * 8200, 400 + rng() * 560, (rng() - 0.5) * 8200);
     cl.renderOrder = 2;
     scene.add(cl);
+    worldClouds.push(cl);
   }
 }
 
+let vegAssets = null;
+const worldTrees = [];
 function createVegetation() {
-  const COUNT = 460;
-  const trunkGeo = new THREE.CylinderGeometry(0.5, 0.85, 6, 5);
-  trunkGeo.translate(0, 3, 0);
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a3524 });
-  const leafGeo = new THREE.ConeGeometry(3.4, 13, 7);
-  leafGeo.translate(0, 10.5, 0);
-  const leafMat = new THREE.MeshLambertMaterial({ color: 0x2c5c28 });
-
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, COUNT);
-  const leaves = new THREE.InstancedMesh(leafGeo, leafMat, COUNT);
+  const COUNT = 1850;                          // 密度 ×4（原 460 / 4400²）
+  if (!vegAssets) {
+    const trunkGeo = new THREE.CylinderGeometry(0.5, 0.85, 6, 5);
+    trunkGeo.translate(0, 3, 0);
+    const leafGeo = new THREE.ConeGeometry(3.4, 13, 7);
+    leafGeo.translate(0, 10.5, 0);
+    vegAssets = {
+      trunkGeo, leafGeo,
+      trunkMat: new THREE.MeshLambertMaterial({ color: 0x4a3524 }),
+      leafMat: new THREE.MeshLambertMaterial({ color: 0x2c5c28 })
+    };
+  }
+  const rng = mulberry32((GEN.seed ^ 0x7E33) >>> 0);
+  const trunks = new THREE.InstancedMesh(vegAssets.trunkGeo, vegAssets.trunkMat, COUNT);
+  const leaves = new THREE.InstancedMesh(vegAssets.leafGeo, vegAssets.leafMat, COUNT);
   const dummy = new THREE.Object3D();
   let placed = 0, tries = 0;
 
   while (placed < COUNT && tries < COUNT * 16) {
     tries++;
-    const x = (Math.random()-0.5) * 4100;
-    const z = (Math.random()-0.5) * 4100;
+    const x = (rng() * 2 - 1) * (WORLD_HALF - 150);
+    const z = (rng() * 2 - 1) * (WORLD_HALF - 150);
     const h = terrainHeight(x, z);
     if (h < 80 || h > 320) continue;
-    const cdx = (x - 700) / 640, cdz = (z - 40) / 620;
-    if (Math.hypot(cdx, cdz) < 1.25) continue;
     if (h < WATER_LEVEL + 6) continue;
+    let inCity = false;
+    for (const ct of GEN.cities) {
+      if (Math.abs(x - ct.x) < ct.rx * 1.2 && Math.abs(z - ct.z) < ct.rz * 1.2) { inCity = true; break; }
+    }
+    if (inCity) continue;
+    const f = fbm(x * 0.00035, z * 0.00035, GEN.seed ^ 0xF0A5, 2);
+    if (rng() > 0.18 + 1.1 * f) continue;      // 森林簇状分布（噪声密度）
 
-    const s = 0.65 + Math.random() * 1.05;
+    const s = 0.65 + rng() * 1.05;
     dummy.position.set(x, h, z);
-    dummy.rotation.y = Math.random() * Math.PI * 2;
-    dummy.scale.set(s, s * (0.75 + Math.random() * 0.65), s);
+    dummy.rotation.y = rng() * Math.PI * 2;
+    dummy.scale.set(s, s * (0.75 + rng() * 0.65), s);
     dummy.updateMatrix();
     trunks.setMatrixAt(placed, dummy.matrix);
     leaves.setMatrixAt(placed, dummy.matrix);
@@ -607,6 +856,7 @@ function createVegetation() {
   leaves.instanceMatrix.needsUpdate = true;
   scene.add(trunks);
   scene.add(leaves);
+  worldTrees.push(trunks, leaves);
 }
 
 /* =========================================================
@@ -655,77 +905,87 @@ function queryBuildings(x, z, radius) {
 /* =========================================================
    城市
 ========================================================= */
+let cityAssets = null;
 function createCity() {
-  const CX = 700, CZ = 40, RX = 620, RZ = 600;
-  const BS = 118, ROAD = 24;
-  const plot = BS - ROAD;
+  if (!cityAssets) {
+    const bodyColors = [
+      0x6d8fc4, 0x7ba0cf, 0x5d7fb5, 0x88aad6, 0x6385b8,
+      0x7a94b8, 0x8fb0d4, 0x5a78a8, 0x96b8dc, 0x6b8cba
+    ];
+    const roofColors = [0xe8956a, 0xf0a868, 0xd97a5c, 0xf5c88a, 0xc96b52];
+    cityAssets = {
+      bodyMats: bodyColors.map(c => new THREE.MeshLambertMaterial({ color: c })),
+      roofMats: roofColors.map(c => new THREE.MeshLambertMaterial({ color: c }))
+    };
+  }
 
-  const bodyColors = [
-    0x6d8fc4, 0x7ba0cf, 0x5d7fb5, 0x88aad6, 0x6385b8,
-    0x7a94b8, 0x8fb0d4, 0x5a78a8, 0x96b8dc, 0x6b8cba
-  ];
-  const roofColors = [0xe8956a, 0xf0a868, 0xd97a5c, 0xf5c88a, 0xc96b52];
+  /* 逐城生成（同一种子 → 同一座城；重开一局也完全一致） */
+  for (let ci = 0; ci < GEN.cities.length; ci++) {
+    const ct = GEN.cities[ci];
+    const CX = ct.x, CZ = ct.z, RX = ct.rx, RZ = ct.rz;
+    const rng = mulberry32((((GEN.seed ^ 0xB0B0) + ci * 7919) >>> 0));
+    const S = ct.s || 1;                        // 城市缩放（铺开 / 楼高 / 道路等比）
+    const BS = 118 * S, ROAD = 24 * S;
+    const plot = BS - ROAD;
 
-  const bodyMats = bodyColors.map(c => new THREE.MeshLambertMaterial({ color: c }));
-  const roofMats = roofColors.map(c => new THREE.MeshLambertMaterial({ color: c }));
+    for (let bx = -RX; bx < RX - BS; bx += BS) {
+      for (let bz = -RZ; bz < RZ - BS; bz += BS) {
+        const ccx = bx + BS / 2, ccz = bz + BS / 2;
+        const d = Math.hypot(ccx / RX, ccz / RZ);
+        if (d > 0.92) continue;
+        if (d > 0.6 && rng() < 0.38) continue;
 
-  for (let bx = -RX; bx < RX - BS; bx += BS) {
-    for (let bz = -RZ; bz < RZ - BS; bz += BS) {
-      const ccx = bx + BS / 2, ccz = bz + BS / 2;
-      const d = Math.hypot(ccx / RX, ccz / RZ);
-      if (d > 0.92) continue;
-      if (d > 0.6 && Math.random() < 0.38) continue;
+        const core = Math.max(0, 1 - d / 0.92);
 
-      const core = Math.max(0, 1 - d / 0.92);
-
-      const plots = [];
-      if (Math.random() < 0.55) {
-        const cell = plot / 2;
-        for (let i = 0; i < 2; i++) {
-          for (let j = 0; j < 2; j++) {
-            if (Math.random() < 0.22) continue;
-            plots.push({
-              x: bx + ROAD / 2 + (i + 0.5) * cell,
-              z: bz + ROAD / 2 + (j + 0.5) * cell,
-              w: cell * 0.80, d: cell * 0.80
-            });
+        const plots = [];
+        if (rng() < 0.55) {
+          const cell = plot / 2;
+          for (let i = 0; i < 2; i++) {
+            for (let j = 0; j < 2; j++) {
+              if (rng() < 0.22) continue;
+              plots.push({
+                x: bx + ROAD / 2 + (i + 0.5) * cell,
+                z: bz + ROAD / 2 + (j + 0.5) * cell,
+                w: cell * 0.80, d: cell * 0.80
+              });
+            }
           }
-        }
-      } else {
-        if (Math.random() < 0.5) {
-          plots.push({ x: bx + BS / 2, z: bz + BS / 2, w: plot * 0.86, d: plot * 0.86 });
         } else {
-          for (let j = 0; j < 2; j++) {
-            plots.push({
-              x: bx + BS / 2,
-              z: bz + ROAD / 2 + (j + 0.5) * (plot / 2),
-              w: plot * 0.80, d: plot * 0.38
-            });
+          if (rng() < 0.5) {
+            plots.push({ x: bx + BS / 2, z: bz + BS / 2, w: plot * 0.86, d: plot * 0.86 });
+          } else {
+            for (let j = 0; j < 2; j++) {
+              plots.push({
+                x: bx + BS / 2,
+                z: bz + ROAD / 2 + (j + 0.5) * (plot / 2),
+                w: plot * 0.80, d: plot * 0.38
+              });
+            }
           }
         }
-      }
 
-      for (const p of plots) {
-        const wx = CX + p.x, wz = CZ + p.z;
-        const gh = terrainHeight(wx, wz);
-        if (gh < WATER_LEVEL + 8) continue;
+        for (const p of plots) {
+          const wx = CX + p.x, wz = CZ + p.z;
+          const gh = terrainHeight(wx, wz);
+          if (gh < WATER_LEVEL + 8) continue;
 
-        const hMax = 35 + core * 300;
-        const h = 24 + Math.pow(Math.random(), 1.5) * hMax;
-        const w  = p.w * (0.75 + Math.random() * 0.25);
-        const dd = p.d * (0.75 + Math.random() * 0.25);
+          const hMax = 35 + core * 300;
+          const h = (24 + Math.pow(rng(), 1.5) * hMax) * S;
+          const w  = p.w * (0.75 + rng() * 0.25);
+          const dd = p.d * (0.75 + rng() * 0.25);
 
-        makeBuilding(wx, wz, gh, w, h, dd, bodyMats, roofMats);
+          makeBuilding(wx, wz, gh, w, h, dd, cityAssets.bodyMats, cityAssets.roofMats, rng);
+        }
       }
     }
   }
 }
 
-function makeBuilding(x, z, y, w, h, d, bodyMats, roofMats) {
-  const bodyMat = bodyMats[(Math.random() * bodyMats.length) | 0];
-  const roofMat = roofMats[(Math.random() * roofMats.length) | 0];
+function makeBuilding(x, z, y, w, h, d, bodyMats, roofMats, rng) {
+  const bodyMat = bodyMats[(rng() * bodyMats.length) | 0];
+  const roofMat = roofMats[(rng() * roofMats.length) | 0];
 
-  const rotY = (Math.random() - 0.5) * 0.16;
+  const rotY = (rng() - 0.5) * 0.16;
 
   const body = new THREE.Mesh(UNIT_BOX, bodyMat);
   body.position.set(x, y + h / 2, z);
@@ -755,6 +1015,42 @@ function makeBuilding(x, z, y, w, h, d, bodyMats, roofMats) {
   };
   buildings.push(b);
   addToHash(b);
+}
+
+/* ---- 世界重建辅助（种子重新生成 / 开局重置共用） ---- */
+function clearCity() {
+  for (const b of buildings) {
+    scene.remove(b.body);
+    scene.remove(b.roof);
+  }
+  buildings.length = 0;
+  bHash.clear();
+}
+
+function clearWorld() {
+  if (worldTerrain) {
+    scene.remove(worldTerrain);
+    worldTerrain.geometry.dispose();
+    worldTerrain.material.dispose();
+    worldTerrain = null;
+  }
+  if (worldWater) {
+    scene.remove(worldWater);
+    worldWater.geometry.dispose();
+    worldWater.material.dispose();
+    worldWater = null;
+  }
+  while (worldTrees.length) scene.remove(worldTrees.pop());
+  while (worldClouds.length) scene.remove(worldClouds.pop());
+  clearCity();
+}
+
+function buildWorld() {
+  createTerrain();
+  createWater();
+  createVegetation();
+  createClouds();
+  createCity();
 }
 
 function sphereHitsBuilding(px, py, pz, r, b) {
@@ -1516,16 +1812,15 @@ function createEnemyPlane() {
 
 /* ---- 布防：5 挺防空机枪 + 3 处导弹阵地（位置经地形校验） ---- */
 function createDefenses() {
-  const AAA_POS = [[-1450, 350], [1350, -700], [450, 1250], [-1250, 1050], [60, -600]];
-  const SAM_POS = [[-150, -1400], [1500, 300], [-1550, -150]];
-  for (const p of AAA_POS) aaaGuns.push(createAAAGun(p[0], p[1]));
-  for (const p of SAM_POS) samSites.push(createSAM(p[0], p[1]));
+  /* 按开局地图 UI 的布点方案生成（见 PLAN） */
+  for (const p of PLAN.aaa) aaaGuns.push(createAAAGun(p.x, p.z));
+  for (const p of PLAN.sam) samSites.push(createSAM(p.x, p.z));
 }
 
 /* ---- 敌机生成：从地图边缘进入 ---- */
 function spawnEnemy() {
   const ang = Math.random() * Math.PI * 2;
-  const R = 2050;
+  const R = CFG.mapHalf + 350;      // 从地图边缘外进入
   const m = createEnemyPlane();
   m.position.set(
     Math.cos(ang) * R,
@@ -2482,6 +2777,7 @@ function setCursorHidden(h) {
 function bindKeyboardMouse() {
   /* ---- 键盘：WASD 飞行 / Alt 视角回正 / 左Shift 加力 / Tab 显隐鼠标 / 长按 Space 关发动机 ---- */
   window.addEventListener('keydown', e => {
+    if (e.target && e.target.tagName === 'INPUT') return;   // 种子输入框内不拦截
     if (e.key === 'Alt') { e.preventDefault(); resetView(); }
     if (e.code === 'Tab') { e.preventDefault(); setCursorHidden(!G.cursorHidden); return; }
     if (e.code === 'ShiftLeft') { keys.boost = true; return; }
@@ -2504,6 +2800,7 @@ function bindKeyboardMouse() {
   });
 
   window.addEventListener('keyup', e => {
+    if (e.target && e.target.tagName === 'INPUT') return;
     if (e.code === 'ShiftLeft') { keys.boost = false; return; }
     if (e.code === 'Space') { keys.engineCut = false; return; }
     const k = KEY_MAP[e.code];
@@ -2942,10 +3239,11 @@ function updateHUD() {
    游戏流程
 ========================================================= */
 function resetPlane() {
-  plane.position.set(700, 520, 1800);
+  const gy = terrainHeight(SPAWN_X, SPAWN_Z);
+  plane.position.set(SPAWN_X, gy + 460, SPAWN_Z);
   plane.quaternion.identity();
-  /* lookAt 对非相机对象是 +Z 朝向目标（机头在 -Z）：取镜像点，让机头指向地图内侧 (700,380,0) */
-  plane.lookAt(700, 660, 3600);
+  /* 机头（-Z）指向地图中心；lookAt 对非相机对象使 +Z 朝向目标，故取镜像点 */
+  plane.lookAt(SPAWN_X, gy + 600, SPAWN_Z * 2);
   camInit = false;
   camYawOff = 0;
   camPitchOff = 0;
@@ -2955,12 +3253,7 @@ function startGame() {
   overlay.classList.add('hide');
   setCursorHidden(true);
 
-  for (const b of buildings) {
-    scene.remove(b.body);
-    scene.remove(b.roof);
-  }
-  buildings.length = 0;
-  bHash.clear();
+  clearCity();
 
   for (const bu of bullets) scene.remove(bu.mesh);
   bullets.length = 0;
@@ -3032,15 +3325,280 @@ function showGameOver() {
     '<div class="sub">AIRCRAFT DESTROYED</div>' +
     '<div class="bigscore">' + G.score + '</div>' +
     '<p>击毁敌方单位 ' + G.destroyed + ' 个<br>嘛……下次小心点嘛。</p>' +
-    '<button id="startBtn">再来一次</button>';
+    '<button id="startBtn">再来一次</button>' +
+    '<button class="ghost" id="mapBtn">换张地图</button>';
   overlay.classList.remove('hide');
   document.getElementById('startBtn').addEventListener('click', onStartClick);
+  document.getElementById('mapBtn').addEventListener('click', buildStartPanel);
 }
 
 function onStartClick() {
   Sound.init();
   if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
   startGame();
+}
+
+/* =========================================================
+   开局地图生成 UI（种子 → 2D 预览 → 地面单位布点）
+========================================================= */
+let PLAN = { aaa: [], sam: [] };
+let currentSeed = '';
+let previewBase = null;
+let dragState = null;
+let mapCanvasEl = null;
+const PREV_N = 360;
+const HINT_DEFAULT = '拖动标记摆放单位 · 点击标记删除 · 绿点=防空车 红点=导弹阵地 三角=出生点';
+
+function randomSeedStr() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+/* ---- 应用种子：重生成世界 + 布点重置 ---- */
+function applySeed(seedStr) {
+  const s = ((seedStr || '').trim()) || 'OPENJET';
+  currentSeed = s;
+  GEN = genWorld(hashStr(s));
+  PLAN = autoPlaceUnits(5, 3);
+  clearWorld();
+  buildWorld();
+  renderPreviewBase();
+  const input = document.getElementById('seedInput');
+  if (input) input.value = s;
+  syncCountLabels();
+  drawPreview();
+}
+
+/* ---- 2D 预览：地形高度着色（含水面色） ---- */
+function renderPreviewBase() {
+  const off = document.createElement('canvas');
+  off.width = off.height = PREV_N;
+  const ctx = off.getContext('2d');
+  const img = ctx.createImageData(PREV_N, PREV_N);
+  const tmp = [0, 0, 0];
+  for (let iz = 0; iz < PREV_N; iz++) {
+    const z = (iz / (PREV_N - 1) - 0.5) * WORLD_HALF * 2;
+    for (let ix = 0; ix < PREV_N; ix++) {
+      const x = (ix / (PREV_N - 1) - 0.5) * WORLD_HALF * 2;
+      const h = terrainHeight(x, z);
+      terrainColor(h, tmp);
+      let r = tmp[0] * 255, g = tmp[1] * 255, b = tmp[2] * 255;
+      if (h < WATER_LEVEL) {
+        const t = 0.78;
+        r = r * (1 - t) + 0x2f * t;
+        g = g * (1 - t) + 0x6f * t;
+        b = b * (1 - t) + 0x9e * t;
+      }
+      const o = (iz * PREV_N + ix) * 4;
+      img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  previewBase = off;
+}
+
+const mapToWorld = (px, py) => ({
+  x: (px / PREV_N - 0.5) * WORLD_HALF * 2,
+  z: (py / PREV_N - 0.5) * WORLD_HALF * 2
+});
+const worldToMap = (x, z) => ({
+  x: (x / (WORLD_HALF * 2) + 0.5) * PREV_N,
+  y: (z / (WORLD_HALF * 2) + 0.5) * PREV_N
+});
+
+function drawPreview() {
+  if (!previewBase || !mapCanvasEl || !GEN) return;
+  const ctx = mapCanvasEl.getContext('2d');
+  ctx.clearRect(0, 0, PREV_N, PREV_N);
+  ctx.drawImage(previewBase, 0, 0);
+
+  /* 城市范围 */
+  for (const ct of GEN.cities) {
+    const p0 = worldToMap(ct.x - ct.rx, ct.z - ct.rz);
+    const p1 = worldToMap(ct.x + ct.rx, ct.z + ct.rz);
+    ctx.fillStyle = 'rgba(235,240,255,.13)';
+    ctx.strokeStyle = 'rgba(235,240,255,.55)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+    ctx.strokeRect(p0.x + 0.5, p0.y + 0.5, p1.x - p0.x - 1, p1.y - p0.y - 1);
+  }
+
+  /* 出生点（南侧边缘，朝北） */
+  const sp = worldToMap(SPAWN_X, SPAWN_Z);
+  ctx.fillStyle = '#7dff8a';
+  ctx.beginPath();
+  ctx.moveTo(sp.x, sp.y - 7);
+  ctx.lineTo(sp.x - 6, sp.y + 5);
+  ctx.lineTo(sp.x + 6, sp.y + 5);
+  ctx.closePath();
+  ctx.fill();
+
+  /* 单位标记 */
+  const drawOne = (kind, p, alpha) => {
+    const m = worldToMap(p.x, p.z);
+    ctx.globalAlpha = alpha;
+    if (kind === 'aaa') {
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 5, 0, 6.2832);
+      ctx.fillStyle = '#6f8f3f';
+      ctx.fill();
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = '#d9ffb0';
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#c0392b';
+      ctx.fillRect(m.x - 4.5, m.y - 4.5, 9, 9);
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = '#ffb3a6';
+      ctx.strokeRect(m.x - 4.5, m.y - 4.5, 9, 9);
+    }
+    ctx.globalAlpha = 1;
+  };
+  PLAN.aaa.forEach(p => drawOne('aaa', p, 1));
+  PLAN.sam.forEach(p => drawOne('sam', p, 1));
+  if (dragState && dragState.moved && dragState.pos) drawOne(dragState.kind, dragState.pos, 0.55);
+}
+
+function syncCountLabels() {
+  const a = document.getElementById('aaaCount');
+  const s = document.getElementById('samCount');
+  if (a) a.textContent = PLAN.aaa.length;
+  if (s) s.textContent = PLAN.sam.length;
+}
+
+function flashHint(msg) {
+  const el = document.getElementById('mapHint');
+  if (!el) return;
+  el.textContent = msg;
+  clearTimeout(flashHint._t);
+  flashHint._t = setTimeout(() => { el.textContent = HINT_DEFAULT; }, 2200);
+}
+
+function canvasPos(e) {
+  const r = mapCanvasEl.getBoundingClientRect();
+  return {
+    px: (e.clientX - r.left) / r.width * PREV_N,
+    py: (e.clientY - r.top) / r.height * PREV_N
+  };
+}
+
+function findMarker(wx, wz) {
+  const m = worldToMap(wx, wz);
+  let best = null, bestD = 12;
+  const consider = (kind, arr) => {
+    for (let i = 0; i < arr.length; i++) {
+      const q = worldToMap(arr[i].x, arr[i].z);
+      const d = Math.hypot(q.x - m.x, q.y - m.y);
+      if (d < bestD) { bestD = d; best = { kind, idx: i }; }
+    }
+  };
+  consider('aaa', PLAN.aaa);
+  consider('sam', PLAN.sam);
+  return best;
+}
+
+function changeCount(kind, d) {
+  const arr = PLAN[kind];
+  if (d > 0) {
+    const p = pickUnitSpot(kind === 'aaa' ? 550 : 650, PLAN.aaa.concat(PLAN.sam));
+    if (p) arr.push(p);
+    else flashHint('地图上没有更多合适的位置了');
+  } else {
+    if (arr.length <= 0) return;
+    arr.pop();
+  }
+  syncCountLabels();
+  drawPreview();
+}
+
+function bindStartPanel() {
+  const $ = id => document.getElementById(id);
+  $('startBtn').addEventListener('click', onStartClick);
+  $('seedRoll').addEventListener('click', () => applySeed(randomSeedStr()));
+  $('seedGen').addEventListener('click', () => applySeed($('seedInput').value));
+  $('seedInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') applySeed($('seedInput').value);
+  });
+  $('aaaPlus').addEventListener('click', () => changeCount('aaa', 1));
+  $('aaaMinus').addEventListener('click', () => changeCount('aaa', -1));
+  $('samPlus').addEventListener('click', () => changeCount('sam', 1));
+  $('samMinus').addEventListener('click', () => changeCount('sam', -1));
+  $('reRoll').addEventListener('click', () => {
+    PLAN = autoPlaceUnits(PLAN.aaa.length, PLAN.sam.length);
+    syncCountLabels();
+    drawPreview();
+  });
+  $('seedInput').value = currentSeed;
+
+  mapCanvasEl = $('mapCanvas');
+  mapCanvasEl.addEventListener('pointerdown', e => {
+    const c = canvasPos(e);
+    const w = mapToWorld(c.px, c.py);
+    const hit = findMarker(w.x, w.z);
+    if (hit) {
+      dragState = { kind: hit.kind, idx: hit.idx, moved: false, pos: null };
+      mapCanvasEl.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    } else {
+      flashHint('用 + / − 增减数量；按住标记可拖动摆放');
+    }
+  });
+  mapCanvasEl.addEventListener('pointermove', e => {
+    if (!dragState) return;
+    const c = canvasPos(e);
+    dragState.pos = mapToWorld(c.px, c.py);
+    dragState.moved = true;
+    drawPreview();
+  });
+  const endDrag = () => {
+    if (!dragState) return;
+    const s = dragState;
+    dragState = null;
+    if (s.moved && s.pos) {
+      const inB = Math.abs(s.pos.x) < WORLD_HALF && Math.abs(s.pos.z) < WORLD_HALF;
+      if (inB && terrainHeight(s.pos.x, s.pos.z) >= WATER_LEVEL + 12) {
+        PLAN[s.kind][s.idx] = s.pos;
+      } else {
+        flashHint('这里不能放：水面或越界');
+      }
+    } else {
+      PLAN[s.kind].splice(s.idx, 1);      // 点击标记 = 删除（数量随之 -1）
+    }
+    syncCountLabels();
+    drawPreview();
+  };
+  mapCanvasEl.addEventListener('pointerup', endDrag);
+  mapCanvasEl.addEventListener('pointercancel', endDrag);
+
+  syncCountLabels();
+  drawPreview();
+}
+
+function buildStartPanel() {
+  const panel = document.getElementById('panel');
+  panel.innerHTML =
+    '<h1>Open JET</h1>' +
+    '<div class="sub">AIR STRIKE</div>' +
+    '<div class="mapui">' +
+      '<div class="mrow"><input id="seedInput" spellcheck="false" placeholder="地图种子（任意文字）">' +
+      '<button class="mini" id="seedRoll">随机</button><button class="mini" id="seedGen">生成</button></div>' +
+      '<canvas id="mapCanvas" width="360" height="360"></canvas>' +
+      '<div class="mapHint" id="mapHint">' + HINT_DEFAULT + '</div>' +
+      '<div class="mrow"><span class="ulabel">防空车</span><button class="mini" id="aaaMinus">−</button>' +
+      '<span class="ucount" id="aaaCount">0</span><button class="mini" id="aaaPlus">＋</button>' +
+      '<span class="ulabel">导弹阵地</span><button class="mini" id="samMinus">−</button>' +
+      '<span class="ucount" id="samCount">0</span><button class="mini" id="samPlus">＋</button>' +
+      '<button class="mini" id="reRoll" style="margin-left:auto">重排</button></div>' +
+    '</div>' +
+    '<details class="keysWrap"><summary>操作说明</summary><div class="keys">' +
+      '<div>W / S 俯仰升降</div><div>A / D 横滚转向</div>' +
+      '<div>鼠标左键 按住扫射</div><div>右键 按住瞄准 · 松开投弹</div>' +
+      '<div>滑动鼠标 拖动视角</div><div>Alt 视角回正 · 左Shift 加力</div>' +
+      '<div style="grid-column:1/-1">Tab 显示 / 隐藏鼠标（进入任务自动隐藏）</div>' +
+      '<div style="grid-column:1/-1">R 锁定屏幕中心最近的单位（每帧居中跟随，再按 R 解除）</div>' +
+      '<div style="grid-column:1/-1">长按 Space 关闭发动机（减速、下坠）· 松开恢复</div>' +
+    '</div></details>' +
+    '<button id="startBtn">开始任务</button>';
+  bindStartPanel();
 }
 
 /* =========================================================
@@ -3202,7 +3760,7 @@ function init() {
   document.body.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 1, 12000);
+  camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 1, 20000);
   clock = new THREE.Clock();
 
   scene.add(new THREE.HemisphereLight(0xd6ecff, 0x4a5a3a, 0.9));
@@ -3214,11 +3772,7 @@ function init() {
   scene.add(fill);
 
   createSky();
-  createTerrain();
-  createWater();
-  createVegetation();
-  createClouds();
-  createCity();
+  applySeed(randomSeedStr());        // 种子生成世界（地形 / 水 / 植被 / 云 / 城市）
 
   BOMB_PROTO = makeBombProto();
 
@@ -3279,7 +3833,7 @@ function init() {
 
   bindKeyboardMouse();
 
-  document.getElementById('startBtn').addEventListener('click', onStartClick);
+  buildStartPanel();
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();

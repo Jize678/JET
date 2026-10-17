@@ -1436,7 +1436,7 @@ const SAM_RANGE = 980;        // 导弹阵地锁定范围
 const ENEMY_MAX = 3;          // 敌机同时在场上限
 const THREAT_BULLET_SPD = 400;
 const AAA_SCALE = 2.0;        // 防空车模型缩放（通古斯卡式，整体加大）
-const SAM_SCALE = 3.2;        // SAM 阵地模型缩放（TEL 载具，等比放大 2 倍）
+const SAM_SCALE = 3.2;        // SAM 阵地模型缩放（TEL 载具，等比放大 3.2 倍）
 /* 敌方逻辑用的临时向量 */
 const _u1 = new THREE.Vector3(), _u2 = new THREE.Vector3();
 const _u3 = new THREE.Vector3(), _u4 = new THREE.Vector3();
@@ -3634,7 +3634,7 @@ function update(dt) {
     plane.rotateZ(-rollAngle * 1.8 * dt);
   }
 
-  /* 关车下坠：推力丧失越多机头越快下沉，收敛约 -20° 下滑角（可按 W 对抗拉起） */
+  /* 关车下坠：推力丧失越多机头越快下沉，收敛约 -30° 下滑角（可按 W 对抗拉起） */
   if (G.thrust < 0.999 && getForward().y > CUT_SINK_MAX) {
     plane.rotateX(-CUT_SINK_RATE * (1 - G.thrust) * dt);
   }

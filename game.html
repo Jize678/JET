@@ -6,28 +6,28 @@
 <title>Open JET</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{width:100%;height:100%;overflow:hidden;background:#8ec5e8;
+  html,body{width:100%;height:100%;overflow:hidden;background:#180a0d;
     font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
     -webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
   canvas{display:block;touch-action:none}
 
   /* 游戏中隐藏鼠标光标（Tab 键切换） */
   body.hide-cursor,body.hide-cursor *{cursor:none !important}
-  #hud{position:fixed;inset:0;pointer-events:none;color:#fff;
+  #hud{position:fixed;inset:0;pointer-events:none;color:#fff1ee;
        text-shadow:0 2px 8px rgba(0,0,0,.65);font-size:13px;letter-spacing:.5px;z-index:5}
   .hud-row{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;
            display:flex;justify-content:space-between;padding:0 16px}
-  .hud-item{background:rgba(10,25,45,.35);backdrop-filter:blur(6px);
-            -webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.18);
+  .hud-item{background:rgba(43,11,15,.58);backdrop-filter:blur(6px);
+            -webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,112,116,.30);
             border-radius:12px;padding:6px 12px;display:flex;flex-direction:column;
             align-items:center;min-width:64px}
-  .hud-item .label{font-size:10px;opacity:.7;letter-spacing:1px}
-  .hud-item .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+  .hud-item .label{font-size:10px;opacity:.78;letter-spacing:1px;color:#ffc9c7}
+  .hud-item .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff3f0}
   .hud-item .hpbar{width:76px;height:9px;border-radius:5px;margin-top:5px;
-                   background:rgba(255,255,255,.16);overflow:hidden}
-  #hpFill{height:100%;width:100%;border-radius:5px;background:#5ee06a}
+                   background:rgba(255,116,118,.14);overflow:hidden}
+  #hpFill{height:100%;width:100%;border-radius:5px;background:#ff6268}
   #dmgFlash{position:fixed;inset:0;pointer-events:none;opacity:0;
-            background:radial-gradient(ellipse at center,rgba(255,40,20,0) 40%,rgba(255,40,20,.6) 100%)}
+            background:rgba(255,40,20,.34)}
   #lockMark{position:fixed;left:50%;top:50%;width:46px;height:46px;display:none;
             transform:translate(-50%,-50%);border:2px solid rgba(255,90,60,.95);
             border-radius:50%;pointer-events:none;z-index:7;
@@ -35,54 +35,251 @@
   #lockMark::after{content:'';position:absolute;left:50%;top:50%;width:4px;height:4px;
             transform:translate(-50%,-50%);background:rgba(255,90,60,.95);border-radius:50%}
   #edgeWarn{position:fixed;left:50%;top:82px;transform:translate(-50%,-8px);
-            padding:8px 16px;border-radius:999px;background:rgba(80,31,16,.72);
-            border:1px solid rgba(255,184,92,.45);color:#ffe7bd;font-size:12px;
+            padding:8px 16px;border-radius:999px;background:rgba(73,15,21,.88);
+            border:1px solid rgba(255,112,116,.55);color:#ffe2df;font-size:12px;
             letter-spacing:1px;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap}
   #edgeWarn.show{opacity:1;transform:translate(-50%,0)}
+  #grade{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;transition:opacity .45s ease}
+  #grade.golden{opacity:1;background:
+           radial-gradient(ellipse at 52% 43%,rgba(255,205,122,0) 32%,rgba(88,30,8,.08) 70%,rgba(18,8,5,.34) 100%)}
+  #grade.golden::after{content:'';position:absolute;inset:0;
+           background:radial-gradient(ellipse at 76% 18%,rgba(255,211,129,.11),transparent 38%);
+           mix-blend-mode:screen}
+  #grade.war{opacity:1;background:
+           radial-gradient(ellipse at 50% 44%,rgba(106,121,126,0) 26%,rgba(30,42,45,.13) 68%,rgba(6,12,14,.46) 100%)}
+  #grade.war::after{content:'';position:absolute;inset:0;opacity:.16;
+           background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.13) 0,rgba(255,255,255,.13) 1px,transparent 1px,transparent 3px)}
 
-  #overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
-           background:radial-gradient(circle at 50% 40%,rgba(40,90,150,.72),rgba(6,16,32,.92));
-           backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:20px}
+  /* ---------- 开局 / 生成 / 部署 / 结算界面 ---------- */
+  #overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:stretch;justify-content:center;
+           color:#fff1ee;padding:clamp(14px,2.1vw,30px);overflow:hidden;
+           background:#180a0d;
+           backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
   #overlay.hide{display:none}
-  .panel{width:100%;max-width:420px;max-height:94vh;overflow:auto;text-align:center;color:#eaf4ff;
-         background:rgba(12,28,52,.72);border:1px solid rgba(120,200,255,.3);
-         border-radius:22px;padding:28px 22px;
-         box-shadow:0 20px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.12)}
-  .panel h1{font-size:23px;letter-spacing:2px;margin-bottom:6px;
-            background:linear-gradient(90deg,#8fd6ff,#ffd39b);
-            -webkit-background-clip:text;background-clip:text;color:transparent}
-  .panel .sub{font-size:12px;opacity:.65;margin-bottom:18px;letter-spacing:1px}
-  .panel p{font-size:14px;line-height:1.8;opacity:.9;margin-bottom:16px}
-  .keys{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;font-size:12px}
-  .keys div{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
-            border-radius:10px;padding:8px 6px;opacity:.85}
-  .panel button{width:100%;padding:15px;font-size:16px;font-weight:700;letter-spacing:3px;
-    color:#04202f;border:none;border-radius:14px;cursor:pointer;
-    background:linear-gradient(135deg,#7fdcff,#b9f0ff 45%,#ffd9a0);
-    box-shadow:0 8px 26px rgba(110,220,255,.4);transition:transform .1s}
-  .panel button:active{transform:scale(.97)}
-  .panel button:disabled{opacity:.58;cursor:progress;transform:none;box-shadow:none}
-  .panel button.ghost{background:rgba(255,255,255,.12);color:#cfe6ff;
-         border:1px solid rgba(255,255,255,.25);box-shadow:none;margin-top:10px}
-  .panel button.mini{width:auto;padding:7px 11px;font-size:12px;font-weight:600;letter-spacing:0;
-         border-radius:9px;background:rgba(255,255,255,.13);color:#eaf4ff;
-         border:1px solid rgba(255,255,255,.22);box-shadow:none}
-  .mapui{margin-bottom:14px;text-align:left}
-  .mrow{display:flex;gap:7px;align-items:center;margin:8px 0}
-  .mrow input{flex:1;min-width:0;padding:9px 10px;border-radius:10px;font-size:13px;letter-spacing:0;
-         border:1px solid rgba(255,255,255,.22);background:rgba(0,0,0,.3);color:#eaf4ff;outline:none}
-  #mapCanvas{width:100%;height:auto;aspect-ratio:1/1;border-radius:12px;
-         border:1px solid rgba(255,255,255,.2);background:#04101c;
-         cursor:crosshair;touch-action:none;display:block}
-  .mapHint{font-size:11px;opacity:.62;margin:6px 2px;line-height:1.6}
-  .mrow .ulabel{font-size:12px;opacity:.82}
-  .mrow .ucount{min-width:20px;text-align:center;font-variant-numeric:tabular-nums;font-size:13px;font-weight:700}
-  .keysWrap{margin-bottom:16px;font-size:12px;text-align:left}
-  .keysWrap summary{cursor:pointer;opacity:.72;padding:6px 2px;user-select:none}
-  .keysWrap[open] summary{margin-bottom:8px}
-  .keys{margin-bottom:0}
-  .bigscore{font-size:38px;font-weight:800;color:#ffd98a;margin:6px 0 16px;
-            font-variant-numeric:tabular-nums}
+  #panel{position:relative;z-index:1;width:min(1500px,100%);height:100%;min-height:0}
+  .start-shell{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;
+           animation:screenIn .34s cubic-bezier(.2,.75,.25,1) both}
+  @keyframes screenIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+  .start-topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;
+           min-height:58px;padding:0 2px 15px;border-bottom:1px solid rgba(198,234,247,.14);flex:none}
+  .brand-lockup{display:flex;align-items:center;gap:12px;min-width:0}
+  .brand-badge{position:relative;width:40px;height:40px;flex:none;border-radius:13px;
+           border:1px solid rgba(147,221,247,.32);background:rgba(105,192,226,.09);
+           box-shadow:inset 0 0 18px rgba(111,206,241,.08)}
+  .brand-badge::before{content:'';position:absolute;inset:9px 8px;background:#91e3ff;
+           clip-path:polygon(50% 0,63% 38%,100% 47%,100% 58%,62% 62%,56% 100%,44% 100%,38% 62%,0 58%,0 47%,37% 38%);
+           filter:drop-shadow(0 0 6px rgba(126,224,255,.45))}
+  .brand-name{font-size:14px;font-weight:850;letter-spacing:.19em;line-height:1}
+  .brand-desc{margin-top:6px;font-size:9px;letter-spacing:.19em;color:rgba(207,237,248,.48);line-height:1}
+  .top-meta{display:flex;align-items:center;gap:10px;min-width:0;font-size:10px;
+           letter-spacing:.13em;color:rgba(211,240,250,.58);white-space:nowrap}
+  .top-meta .seed-chip{max-width:250px;overflow:hidden;text-overflow:ellipsis;padding:7px 10px;
+           border-radius:999px;border:1px solid rgba(186,230,245,.17);background:rgba(255,255,255,.045);
+           color:#dff8ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.08em}
+  .step-chip{padding:6px 9px;border-radius:8px;background:rgba(125,220,255,.1);
+           border:1px solid rgba(125,220,255,.18);color:#a7e9ff}
+
+  .seed-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+           padding:clamp(22px,4vh,54px) clamp(12px,3vw,42px)}
+  .eyebrow{font-size:10px;font-weight:800;letter-spacing:.24em;color:#7ddcff;text-transform:uppercase}
+  .hero-copy{max-width:780px;min-width:0}
+  .hero-copy h1{margin-top:16px;font-size:clamp(40px,5.3vw,78px);line-height:1.03;letter-spacing:-.045em;font-weight:850}
+  .hero-copy h1 span{color:#84ddf8}
+  .hero-copy p{max-width:580px;margin-top:20px;font-size:14px;line-height:1.85;color:rgba(222,242,249,.66)}
+  .hero-stats{display:flex;flex-wrap:wrap;gap:11px;margin-top:28px}
+  .hero-stat{min-width:122px;padding:11px 14px;border-left:1px solid rgba(147,221,247,.22)}
+  .hero-stat strong{display:block;font-size:15px;font-weight:750;color:#e9faff}
+  .hero-stat span{display:block;margin-top:4px;font-size:9px;letter-spacing:.15em;color:rgba(204,235,247,.42)}
+
+  .seed-console{width:min(460px,92vw);padding:clamp(22px,3vw,32px);border-radius:16px;
+           border:1px solid rgba(255,112,116,.28);background:#2a1115;
+           box-shadow:0 18px 54px rgba(0,0,0,.24)}
+  .console-index{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;
+           font-size:9px;letter-spacing:.18em;color:rgba(200,235,247,.46)}
+  .console-index b{font-size:10px;color:#85e0fb;font-weight:800}
+  .console-label{display:block;font-size:13px;font-weight:720;letter-spacing:.04em;margin-bottom:10px;color:#fff1ee}
+  .seed-input-wrap{display:flex;align-items:center;gap:7px;padding:5px;border-radius:14px;
+           border:1px solid rgba(255,124,126,.25);background:#1a0b0e;
+           transition:border-color .18s,box-shadow .18s}
+  .seed-input-wrap:focus-within{border-color:#ff6b70;box-shadow:0 0 0 3px rgba(255,90,96,.12)}
+  #seedInput{flex:1;min-width:0;height:46px;padding:0 13px;border:0;outline:none;background:transparent;
+           color:#fff3f0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:15px;
+           letter-spacing:.09em;text-transform:uppercase}
+  #seedInput::placeholder{color:rgba(255,196,192,.30);text-transform:none;letter-spacing:0}
+  .console-note{margin-top:12px;font-size:10px;line-height:1.7;color:#e9a4a2}
+  .console-sequence{display:flex;align-items:center;gap:7px;margin-top:20px;padding-top:16px;
+           border-top:1px solid rgba(188,228,242,.11);font-size:9px;letter-spacing:.12em;color:rgba(203,235,247,.38)}
+  .console-sequence span{width:5px;height:5px;border-radius:50%;background:#70dbfa;box-shadow:0 0 8px rgba(112,219,250,.55)}
+  .console-sequence span:nth-of-type(2){opacity:.46}.console-sequence span:nth-of-type(3){opacity:.24}
+
+  .btn{appearance:none;border:0;font-family:inherit;cursor:pointer;transition:transform .16s,border-color .16s,background .16s,opacity .16s}
+  .btn:active{transform:scale(.975)}
+  .btn:disabled{opacity:.48;cursor:progress;transform:none}
+  .btn-primary{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:52px;
+           margin-top:16px;padding:0 20px;border-radius:14px;color:#fff6f4;font-size:14px;font-weight:850;
+           letter-spacing:.11em;background:#e64b53;
+           box-shadow:0 10px 28px rgba(78,7,13,.28)}
+  .btn-primary:hover{filter:brightness(1.035)}
+  .btn-secondary{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;
+           padding:0 16px;border-radius:12px;border:1px solid rgba(255,118,121,.28);
+           background:#38161b;color:#ffe8e5;font-size:12px;font-weight:700;letter-spacing:.06em}
+  .btn-secondary:hover{background:#44191f;border-color:rgba(255,126,129,.45)}
+  .btn-ghost{display:flex;align-items:center;justify-content:center;width:100%;min-height:38px;
+           margin-top:8px;border-radius:10px;background:transparent;color:rgba(210,239,249,.55);
+           font-size:11px;letter-spacing:.08em;border:1px solid transparent}
+  .btn-ghost:hover{color:#e8faff;background:rgba(255,255,255,.05)}
+  .btn-mini{min-height:36px;padding:0 12px;border-radius:9px;border:1px solid rgba(187,229,244,.20);
+           background:#3a171c;color:#ffe7e4;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;
+           border-color:rgba(255,118,121,.30)}
+  .btn-mini:hover{background:#4a1b22}
+
+  .start-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;flex:none;
+           padding:13px 2px 0;border-top:1px solid rgba(198,234,247,.10);
+           font-size:9px;letter-spacing:.13em;color:rgba(201,234,246,.32)}
+
+  .loading-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+           padding:clamp(24px,5vh,64px) clamp(24px,6vw,90px)}
+  .loading-copy{width:min(720px,92vw);text-align:center}
+  .loading-copy h1{margin-top:14px;font-size:clamp(31px,4vw,54px);line-height:1.08;letter-spacing:-.035em;font-weight:820}
+  .loading-stage-label{display:flex;align-items:center;justify-content:center;gap:11px;min-height:29px;margin-top:34px;
+           font-size:clamp(16px,1.7vw,22px);font-weight:720;color:#ffe7e4;letter-spacing:.02em}
+  .loading-stage-label::before{content:'';width:7px;height:7px;flex:none;border-radius:2px;background:#ff6268;
+           box-shadow:0 0 12px rgba(255,80,88,.65);animation:stageBlink 1.3s ease-in-out infinite}
+  @keyframes stageBlink{50%{opacity:.34;transform:scale(.82)}}
+  .progress-track{position:relative;height:13px;margin-top:12px;border-radius:999px;overflow:hidden;
+           border:1px solid rgba(255,112,116,.20);background:#1b0b0e;
+           box-shadow:inset 0 2px 8px rgba(0,0,0,.28)}
+  .progress-fill{position:absolute;inset:0 auto 0 0;width:0;border-radius:999px;
+           background:#ff5961;
+           box-shadow:0 0 16px rgba(255,72,82,.48)}
+  .progress-meta{display:flex;align-items:center;justify-content:space-between;margin-top:9px;
+           font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:10px;
+           letter-spacing:.09em;color:#c18d8c}
+  #genPercent{color:#ff9da1}
+
+  .setup-stage{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.22fr) minmax(360px,.78fr);
+           align-items:center;gap:clamp(18px,2.7vw,42px);padding:clamp(16px,2.8vh,30px) 0}
+  .map-column{min-width:0;height:100%;min-height:0;display:flex;flex-direction:column;gap:10px}
+  .column-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:0 2px}
+  .column-heading h2{font-size:16px;letter-spacing:.04em;font-weight:800}
+  .column-heading p{font-size:9px;letter-spacing:.09em;color:rgba(203,233,244,.42)}
+  .map-frame{position:relative;flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;
+           padding:clamp(12px,1.8vw,22px);border-radius:21px;border:1px solid rgba(255,112,116,.24);
+           background:#250d11;
+           box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+  #mapCanvas{position:relative;z-index:1;display:block;width:min(100%,calc(100vh - 218px));
+           height:auto;aspect-ratio:1/1;border-radius:14px;border:1px solid rgba(255,112,116,.28);
+           background:#160a0d;cursor:crosshair;touch-action:none;
+           box-shadow:0 18px 50px rgba(0,0,0,.30),0 0 0 5px rgba(255,90,96,.035)}
+  .map-footer{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:2px 3px 0}
+  .mapHint{font-size:10px;line-height:1.6;color:#d09a98}
+  .map-legend{display:flex;align-items:center;gap:14px;flex:none;font-size:9px;color:rgba(208,237,247,.52)}
+  .map-legend span{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .legend-dot,.legend-square,.legend-triangle{width:8px;height:8px;display:inline-block}
+  .legend-dot{border-radius:50%;background:#6f8f3f;border:1px solid #d9ffb0}
+  .legend-square{background:#c0392b;border:1px solid #ffb3a6}
+  .legend-triangle{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
+           border-bottom:9px solid #7dff8a}
+
+  .setup-column{min-height:0;overflow:auto;padding-right:3px;display:flex;flex-direction:column;
+           justify-content:center;scrollbar-width:thin;scrollbar-color:rgba(255,112,116,.30) transparent}
+  .setup-column::-webkit-scrollbar{width:5px}.setup-column::-webkit-scrollbar-thumb{background:rgba(255,112,116,.30);border-radius:4px}
+  .setup-simple{width:min(420px,100%);margin:0 auto}
+  .setup-intro{margin-bottom:14px;padding:1px 2px}
+  .setup-intro h2{margin-top:9px;font-size:clamp(24px,2.5vw,34px);line-height:1.1;letter-spacing:-.035em;font-weight:830}
+  .setup-intro p{margin-top:9px;font-size:11px;line-height:1.7;color:rgba(208,236,246,.49)}
+  .setup-card{padding:15px;border-radius:17px;border:1px solid rgba(255,112,116,.24);
+           background:#2a1115}
+  .setup-card + .setup-card{margin-top:10px}
+  .setup-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
+  .setup-card-head h3{font-size:11px;letter-spacing:.11em;font-weight:780;color:rgba(225,247,253,.88)}
+  .setup-card-head span{font-size:9px;color:rgba(198,232,243,.36)}
+  .count-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0}
+  .count-card + .count-card{border-top:1px solid rgba(255,112,116,.12)}
+  .count-copy strong{display:block;font-size:12px;font-weight:720;color:#ffebe8}
+  .count-copy span{display:block;margin-top:4px;font-size:9px;color:rgba(199,231,242,.38)}
+  .stepper{display:flex;align-items:center;gap:7px;flex:none}
+  .stepper button{width:31px;height:31px;border-radius:9px;border:1px solid rgba(255,112,116,.26);
+           background:#3a171c;color:#ffe9e6;font-size:17px;line-height:1;cursor:pointer}
+  .stepper button:hover{background:#4a1b22;border-color:rgba(255,125,128,.42)}
+  .ucount{min-width:30px;text-align:center;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+           font-size:15px;font-weight:750;color:#ff8d92;font-variant-numeric:tabular-nums}
+  .deploy-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}
+  .deploy-actions .btn-secondary{min-height:37px;font-size:10px}
+  .lighting-block{margin-top:13px;padding-top:12px;border-top:1px solid rgba(255,112,116,.12)}
+  .lighting-block .setup-card-head{margin-bottom:9px}
+  .lighting-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .lighting-option{min-height:38px;padding:7px 5px;border-radius:9px;cursor:pointer;
+           border:1px solid rgba(255,112,116,.20);background:#35151a;color:#cfa5a4;
+           font-size:9px;line-height:1.3;letter-spacing:.02em;transition:background .16s,border-color .16s,color .16s}
+  .lighting-option:hover{background:#411a20;border-color:rgba(255,132,136,.38);color:#ffe8e5}
+  .lighting-option.active{background:#671d28;border-color:#ff747c;color:#fff0ed;
+           box-shadow:inset 0 0 0 1px rgba(255,184,185,.12)}
+  .setup-simple > .btn-primary{margin-top:14px}
+  .keysWrap{border-radius:14px;border:1px solid rgba(179,225,242,.12);background:rgba(5,23,34,.28);
+           padding:0 14px;font-size:11px;text-align:left}
+  .keysWrap summary{cursor:pointer;padding:13px 1px;font-size:10px;letter-spacing:.09em;
+           color:rgba(218,243,251,.60);user-select:none}
+  .keysWrap[open]{padding-bottom:12px}.keysWrap[open] summary{padding-bottom:8px}
+  .keys{display:grid;grid-template-columns:1fr 1fr;gap:7px;font-size:10px}
+  .keys div{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.075);
+           border-radius:8px;padding:7px 7px;line-height:1.45;color:rgba(219,242,249,.68)}
+  .launch-block{margin-top:12px;padding-top:1px}
+  .launch-block .btn-primary{min-height:50px;margin-top:0}
+  .launch-note{margin-top:9px;text-align:center;font-size:9px;letter-spacing:.08em;color:rgba(199,232,243,.32)}
+  .setup-meta{margin-top:13px;padding:12px 14px;border-radius:13px;border:1px solid rgba(176,225,243,.11);
+           background:rgba(4,20,31,.25);display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
+  .setup-meta div{min-width:0}
+  .setup-meta span{display:block;font-size:8px;letter-spacing:.13em;color:rgba(197,229,240,.31)}
+  .setup-meta strong{display:block;margin-top:3px;font-size:10px;color:rgba(230,249,254,.74);
+           overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .result-view{height:100%;display:grid;place-items:center;animation:screenIn .3s ease both}
+  .result-card{width:min(520px,94vw);padding:34px 30px;text-align:center;border-radius:24px;
+           border:1px solid rgba(255,112,116,.26);background:#2a1115;
+           box-shadow:0 20px 60px rgba(0,0,0,.30)}
+  .result-kicker{font-size:9px;letter-spacing:.22em;color:#ff858a}
+  .result-card h1{margin-top:10px;font-size:clamp(30px,4vw,45px);letter-spacing:-.04em;font-weight:840}
+  .result-card p{margin:18px 0 22px;font-size:12px;line-height:1.8;color:#d6a5a3}
+  .bigscore{margin:12px 0 2px;font-size:58px;font-weight:850;color:#ff858a;letter-spacing:-.04em;
+           font-variant-numeric:tabular-nums;line-height:1.1}
+  .result-card .btn-secondary{margin-top:9px}
+
+  @media (max-width:980px){
+    .seed-stage{grid-template-columns:1fr;gap:28px;align-content:center}
+    .hero-copy h1{font-size:clamp(36px,7vw,58px)}
+    .hero-stats{margin-top:18px}
+    .setup-stage{grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr)}
+    .map-legend{display:none}
+  }
+  @media (max-height:720px){
+    .start-topbar{min-height:50px;padding-bottom:11px}
+    .seed-stage{padding-top:20px;padding-bottom:20px}
+    .hero-copy h1{font-size:clamp(36px,4.7vw,62px)}
+    .hero-copy p{margin-top:14px}
+    .hero-stats{margin-top:18px}.hero-stat{padding-top:8px;padding-bottom:8px}
+    .console-index{margin-bottom:13px}.console-sequence{margin-top:14px;padding-top:12px}
+    .loading-stage{padding-top:20px;padding-bottom:20px}
+    .setup-stage{padding-top:13px}
+    .setup-intro h2{font-size:26px}.setup-intro p{margin-top:6px}
+    .setup-card{padding:12px}.count-card{padding:8px 0}
+    #mapCanvas{width:min(100%,calc(100vh - 190px))}
+  }
+  @media (max-aspect-ratio:1/1){
+    #overlay{overflow:auto;align-items:flex-start}
+    #panel{height:auto;min-height:calc(100vh - 28px)}
+    .start-shell{height:auto;min-height:calc(100vh - 28px)}
+    .seed-stage,.loading-stage,.setup-stage{grid-template-columns:1fr}
+    .seed-stage{padding-top:34px;padding-bottom:34px}
+    .loading-emblem{display:none}
+    .loading-stage{padding-top:44px}
+    .setup-stage{display:flex;flex-direction:column}
+    .map-frame{min-height:320px;flex:none}
+    #mapCanvas{width:min(100%,68vh)}
+    .setup-column{overflow:visible}
+    .start-footer{display:none}
+  }
 </style>
 </head>
 <body>
@@ -98,25 +295,10 @@
   <div id="lockMark"></div>
   <div id="edgeWarn">已到达战区边界 · 自动返航</div>
 </div>
+<div id="grade"></div>
 
 <div id="overlay">
-  <div class="panel" id="panel">
-    <h1>Open JET</h1>
-    <div class="sub">AIR STRIKE</div>
-    <p>自由飞行、机炮扫射、投弹轰炸。撞到建筑或地面就会坠毁。</p>
-    <div class="keys">
-      <div>W / S 俯仰升降</div>
-      <div>A / D 横滚转向</div>
-      <div>鼠标左键 按住扫射</div>
-      <div>右键 按住瞄准 · 松开投弹</div>
-      <div>滑动鼠标 拖动视角</div>
-      <div>Alt 视角回正 · 左Shift 加力</div>
-      <div style="grid-column:1/-1">Tab 显示 / 隐藏鼠标（进入任务自动隐藏）</div>
-      <div style="grid-column:1/-1">R 锁定屏幕中心最近的单位（每帧居中跟随，再按 R 解除）</div>
-      <div style="grid-column:1/-1">长按 Space 关闭发动机（减速、下坠）· 松开恢复</div>
-    </div>
-    <button id="startBtn">开始任务</button>
-  </div>
+  <div id="panel"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
@@ -136,7 +318,7 @@ const CFG = {
   bombCD:     0.6,
   fireCD:     0.085,
   bulletSpd:  560,
-  mapHalf:    4230,
+  mapHalf:    4380,
   ceil:       1500,
   planeR:     6
 };
@@ -158,25 +340,64 @@ const G = {
   score:0, destroyed:0, fireTimer:0, shake:0, bulletSide:1,
   aiming:false, boost:0, cursorHidden:false,
   hp:32, hpMax:32, invuln:0, hitFlash:0,
-  thrust:1, lockTarget: null, engCut: false
+  thrust:1, lockTarget: null, engCut: false, lightMode:'golden'
 };
 
 const keys = { left:false, right:false, up:false, down:false, fire:false, boost:false, engineCut:false };
 
-let scene, camera, renderer, clock, worldSun;
+let scene, camera, renderer, clock, worldSun, worldFill, worldHemi, worldSky;
 let plane, bombMark, gunReticle;
 const bombs = [], bullets = [], effects = [], buildings = [];
 const aaaGuns = [], samSites = [], enemies = [], eBullets = [], missiles = [];
 const wingmen = [], wingRespawn = [0, 0];
 const windTurbines = [];
 const railTrains = [];
+const treeTargets = [];
+const poleTargets = [];
+const stationTargets = [];
+const trainTargets = [];
 let enemyTimer = 0;
 let camInit = false;
 const camLook = new THREE.Vector3();
 const overlay = document.getElementById('overlay');
 const edgeWarnEl = document.getElementById('edgeWarn');
+const gradeEl = document.getElementById('grade');
 const SHADOW_SUN_OFFSET = new THREE.Vector3(1100, 1550, 760);
 const _shadowAnchor = new THREE.Vector3(1e9, 1e9, 1e9);
+
+/* 战场光影预设：部署页选择，开局时统一应用；所有参数仍保持单文件、无外部贴图。 */
+const LIGHT_PRESETS = {
+  none: {
+    label: '无光影', toneMapping: THREE.NoToneMapping, outputEncoding: THREE.LinearEncoding,
+    exposure: 1.0, hemiSky: 0xc7dde8, hemiGround: 0x414b38, hemiI: 0.58,
+    sun: 0xffdb9f, sunI: 1.02, fill: 0x789fc2, fillI: 0.12, shadows: false,
+    shadowOffset: [1100, 1550, 760], shadowCam: 620, shadowMap: 2048,
+    fog: 0xa9c0c7, fogNear: 11000, fogFar: 22000,
+    skyTop: 0x245e96, skyMid: 0x6da6c7, skyBottom: 0xb6ced2,
+    sunDir: [0.55, 0.48, 0.38], sunColor: 0xffe0a4, cloud: 0xf1f6f7,
+    grade: '', filter: 'none'
+  },
+  golden: {
+    label: '黄金斜阳', toneMapping: THREE.ACESFilmicToneMapping, outputEncoding: THREE.sRGBEncoding,
+    exposure: 0.82, hemiSky: 0x8ebdd5, hemiGround: 0x40301f, hemiI: 0.34,
+    sun: 0xffb45e, sunI: 1.06, fill: 0x6e93b4, fillI: 0.09, shadows: true,
+    shadowOffset: [1180, 720, 640], shadowCam: 980, shadowMap: 2048,
+    fog: 0xc5b69e, fogNear: 4200, fogFar: 18500,
+    skyTop: 0x244e82, skyMid: 0x84a5b6, skyBottom: 0xe8bd86,
+    sunDir: [0.72, 0.22, 0.46], sunColor: 0xffbd72, cloud: 0xf4dcc0,
+    grade: 'golden', filter: 'saturate(1.18) contrast(1.12) brightness(.96)'
+  },
+  war: {
+    label: '阴天战争', toneMapping: THREE.ACESFilmicToneMapping, outputEncoding: THREE.sRGBEncoding,
+    exposure: 0.72, hemiSky: 0xaebdc2, hemiGround: 0x343b38, hemiI: 0.60,
+    sun: 0xc6d0cf, sunI: 0.38, fill: 0x687b84, fillI: 0.20, shadows: true,
+    shadowOffset: [860, 1150, 680], shadowCam: 860, shadowMap: 2048,
+    fog: 0x8d999d, fogNear: 2600, fogFar: 15500,
+    skyTop: 0x2e3d45, skyMid: 0x5d6e73, skyBottom: 0x8f9795,
+    sunDir: [0.36, 0.56, 0.42], sunColor: 0xcbd4d2, cloud: 0xd2d8d8,
+    grade: 'war', filter: 'saturate(.58) contrast(1.2) brightness(.9)'
+  }
+};
 
 /* ---- 视角偏移（由鼠标拖动控制） ---- */
 let camYawOff = 0, camPitchOff = 0;
@@ -478,43 +699,76 @@ function fbm(x, z, seed, oct) {
   }
   return v / tot;
 }
+function ridgedNoise(x, z, seed, oct) {
+  let v = 0, amp = 0.56, tot = 0;
+  for (let i = 0; i < oct; i++) {
+    const n = 1 - Math.abs(vnoise(x, z, seed + i * 193) * 2 - 1);
+    v += n * n * amp;
+    tot += amp;
+    amp *= 0.48;
+    x = x * 2.07 + 17.3; z = z * 1.93 - 9.1;
+  }
+  return v / tot;
+}
 
 /* ---- 当前世界参数（由种子生成；terrainHeight 全程只读 GEN） ---- */
 let GEN = null;
 
-function genWorld(seedNum) {
+/* 分阶段生成器：同步入口会一次跑完；开局界面逐阶段驱动以刷新真实进度。 */
+function* genWorldSteps(seedNum) {
   const rng = mulberry32(seedNum);
   const g = {
     seed: seedNum >>> 0, mountains: [], cities: [], rivers: [], lakes: [],
-    villages: [], roads: [], fields: [], forests: [], railStations: [], railways: [],
+    villages: [], roads: [], fields: [], forests: [], meadows: [], railStations: [], railways: [],
     roadN: 0, roadCell: ROAD_CELL, roadW: null, roadH: null,
     railN: 0, railCell: 10, railW: null, railH: null
   };
 
-  /* 山脉：1~2 条（椭圆掩码 + 内部细节噪声；预存旋转三角） */
-  const mCount = 1 + (rng() < 0.45 ? 1 : 0);
+  yield 'mountains';
+  /* 山脉：1~2 条多峰山系。每条山系由连续山脊、次级山肩和侵蚀沟谷组成。 */
+  const mCount = 1 + (rng() < 0.48 ? 1 : 0);
   for (let i = 0; i < mCount; i++) {
     for (let t = 0; t < 90; t++) {
       const mx = (rng() * 2 - 1) * WORLD_HALF * 0.7;
       const mz = (rng() * 2 - 1) * WORLD_HALF * 0.7;
       if (Math.hypot(mx - SPAWN_X, mz - SPAWN_Z) < 1600) continue;
-      const mrx = 950 + rng() * 800, mrz = 620 + rng() * 600;
+      const mrx = 1150 + rng() * 900, mrz = 720 + rng() * 640;
       let ok = true;
       for (const m of g.mountains) {
         if (Math.hypot(mx - m.x, mz - m.z) < (m.mrx + mrx) * 0.8) { ok = false; break; }
       }
       if (!ok) continue;
       const rot = rng() * Math.PI;
+      const baseAmp = 430 + rng() * 390;
+      const peaks = [];
+      const peakCount = 3 + ((rng() * 3) | 0);
+      for (let k = 0; k < peakCount; k++) {
+        const u = peakCount === 1 ? 0 : k / (peakCount - 1) - 0.5;
+        const central = 1 - Math.min(1, Math.abs(u) * 1.75);
+        peaks.push({
+          x: u * mrx * 1.28 + (rng() - 0.5) * 210,
+          z: (rng() - 0.5) * mrz * 0.52,
+          rx: 210 + rng() * 190,
+          rz: 190 + rng() * 180,
+          amp: baseAmp * (0.16 + central * 0.34 + rng() * 0.10),
+          rot: (rng() - 0.5) * 0.8
+        });
+      }
       g.mountains.push({
         x: mx, z: mz, rot, cr: Math.cos(rot), sr: Math.sin(rot), mrx, mrz,
-        amp: 450 + rng() * 450,
+        amp: baseAmp, peaks,
+        ridgeW: 0.52 + rng() * 0.20,
+        ridgeBend: 0.20 + rng() * 0.23,
+        ridgePhase: rng() * 6.283,
         f1: 0.0042 + rng() * 0.0016, p1: rng() * 6.283,
         f2: 0.0095 + rng() * 0.0030, p2: rng() * 6.283
       });
+      buildMountainField(g, g.mountains[g.mountains.length - 1]);
       break;
     }
   }
 
+  yield 'cities';
   /* 城市：1~2 座（单座大小 1~3 倍随机等比缩放；以 RX 620 / RZ 600 为 1 倍参考） */
   const cCount = rng() < 0.5 ? 1 : 2;
   for (let i = 0; i < cCount; i++) {
@@ -534,6 +788,7 @@ function genWorld(seedNum) {
   }
   if (g.cities.length === 0) g.cities.push({ x: 0, z: 0, rx: 620, rz: 600, s: 1 });   // 兜底（极少数种子）
 
+  yield 'rivers';
   /* 河流：1~2 条（正弦叠加中心线；避开城市与出生地） */
   const rCount = 1 + (rng() < 0.38 ? 1 : 0);
   for (let i = 0; i < rCount; i++) {
@@ -562,6 +817,7 @@ function genWorld(seedNum) {
     }
   }
 
+  yield 'lakes';
   /* 湖泊：0~2 个（谐波岸线；避开城市与出生地） */
   const lCount = rng() < 0.22 ? 0 : (rng() < 0.75 ? 1 : 2);
   for (let i = 0; i < lCount; i++) {
@@ -585,20 +841,43 @@ function genWorld(seedNum) {
   }
 
   /* ---- 第二层：乡村 → 路网 → 农田 → 树林（泰拉瑞亚式逐层叠加，后层避让前层） ---- */
+  yield 'villages';
   genVillages(g, rng);
+  yield 'roads';
   genRoads(g, rng);
+  yield 'cityRoads';
   connectCityRoads(g);
+  yield 'roadField';
   buildRoadField(g);
+  yield 'roadBridges';
   designRoadBridges(g);
+  yield 'roadFieldFix';
   buildRoadField(g);
+  yield 'railways';
   genRailways(g, rng);
+  yield 'railField';
   buildRailField(g);
+  yield 'fields';
   genFields(g, rng);
+  yield 'forests';
   genForests(g, rng);
+  yield 'meadows';
+  genMeadows(g, rng);
+  yield 'rocks';
   genRocks(g, rng);
+  yield 'terrainSmooth';
+  bakeTerrainHeightGrid(g);
+  yield 'audit';
   auditBridgePlacement(g);
 
   return g;
+}
+
+function genWorld(seedNum) {
+  const steps = genWorldSteps(seedNum);
+  let step;
+  do { step = steps.next(); } while (!step.done);
+  return step.value;
 }
 
 /* =========================================================
@@ -608,6 +887,7 @@ function genWorld(seedNum) {
 const ROAD_CELL = 11;          // 路网高度场栅格边长（米）
 const ROAD_HALF_FLAT = 18;     // 道路完全压平的半宽
 const ROAD_HALF_BLEND = 42;    // 压平过渡到自然地形的半宽
+const FIELD_CAP = 720;         // 农田地块上限（用连续农业区填满平原空隙）
 
 let _roadW = 0, _roadH = 0;
 
@@ -1840,6 +2120,15 @@ function genRailways(g, rng) {
         if (Math.hypot((mx - ct.x) / ct.rx, (mz - ct.z) / ct.rz) < 1.035) return null;
       }
     }
+    /* 高填方段改为高架：轨面若远高于原地形，不再用 30m 过渡宽度硬筑路堤。 */
+    for (let i = 1; i < out.length - 1; i++) {
+      if (out[i].anchor) continue;
+      if (out[i].h - rawHeight(g, out[i].x, out[i].z) > 24) {
+        out[i].bridge = true;
+        out[i].span = true;
+        out[i].ramp = false;
+      }
+    }
     /* 同一线路不得近距离回折叠压；否则高度场会收到两套轨面标高。 */
     const segDist = (ax, az, bx, bz, cx, cz) => {
       const vx = bx - ax, vz = bz - az;
@@ -1862,6 +2151,60 @@ function genRailways(g, rng) {
     }
     return out;
   }
+
+  /* A* 在极端种子上偶尔无解时，用绕行曲线保底连通，仍保持贴地轨道与车站。 */
+  const makeFallbackRailPath = (A, B) => {
+    const aux = Math.cos(A.rot), auz = -Math.sin(A.rot);
+    const bux = Math.cos(B.rot), buz = -Math.sin(B.rot);
+    const A2 = { x: A.x + aux * (A.len * 0.55 + 16), z: A.z + auz * (A.len * 0.55 + 16) };
+    const B2 = { x: B.x + bux * (B.len * 0.55 + 16), z: B.z + buz * (B.len * 0.55 + 16) };
+    const dx = B2.x - A2.x, dz = B2.z - A2.z;
+    const len0 = Math.hypot(dx, dz);
+    if (len0 < 40) return null;
+    const nx = -dz / len0, nz = dx / len0;
+    const bends = [-0.22, 0.22, -0.34, 0.34, 0];
+    let best = null;
+    for (const bendScale of bends) {
+      const bend = len0 * bendScale;
+      const samples = [];
+      for (let i = 0; i <= 64; i++) {
+        const t = i / 64, u = 1 - t;
+        const c1x = A2.x + dx / 3 + nx * bend;
+        const c1z = A2.z + dz / 3 + nz * bend;
+        const c2x = A2.x + dx * 2 / 3 + nx * bend;
+        const c2z = A2.z + dz * 2 / 3 + nz * bend;
+        samples.push({
+          x: u*u*u*A2.x + 3*u*u*t*c1x + 3*u*t*t*c2x + t*t*t*B2.x,
+          z: u*u*u*A2.z + 3*u*u*t*c1z + 3*u*t*t*c2z + t*t*t*B2.z
+        });
+      }
+      let score = 0;
+      for (let i = 0; i < samples.length; i += 2) {
+        const p = samples[i];
+        for (const ct of g.cities) {
+          if (Math.hypot((p.x - ct.x) / ct.rx, (p.z - ct.z) / ct.rz) < 1.03) score += 1e6;
+        }
+        for (const v of g.villages) {
+          if (Math.hypot(p.x - v.x, p.z - v.z) < v.r + 24) score += 2e5;
+        }
+      }
+      score += len0 * Math.abs(bendScale);
+      if (!best || score < best.score) best = { samples, score, len: len0 };
+    }
+    if (!best) return null;
+    const path = [{ x: A.x, z: A.z, h: A.h + 0.1, bridge: false, anchor: true }];
+    for (const p of best.samples) {
+      const ground = rawHeight(g, p.x, p.z);
+      const overRoad = roadAt(g, p.x, p.z) > 0.025;
+      const bridge = overRoad || ground < WATER_LEVEL + 2.4;
+      const h = bridge
+        ? Math.max(WATER_LEVEL + 10, overRoad ? ground + 7.5 : ground)
+        : ground + 0.15;
+      path.push({ x: p.x, z: p.z, h, bridge, overRoad, span: false, ramp: false });
+    }
+    path.push({ x: B.x, z: B.z, h: B.h + 0.1, bridge: false, anchor: true });
+    return { A, B, path, len: best.len };
+  };
 
   const tree = [0];
   const edges = [];
@@ -1893,11 +2236,11 @@ function genRailways(g, rng) {
         if (!best || score < best.score) best = { A, B, path, len, endA, endB, score };
       }
     }
+    if (!best) best = makeFallbackRailPath(optsA[0], optsB[0]);
     if (!best) continue;
-    best.A.h = best.endA - 0.1;
-    best.B.h = best.endB - 0.1;
-    best.path[0].h = best.endA;
-    best.path[best.path.length - 1].h = best.endB;
+    /* 车站保持在地面，不把极端高架标高反向灌进站台地形。 */
+    best.path[0].h = best.A.h + 0.1;
+    best.path[best.path.length - 1].h = best.B.h + 0.1;
     g.railStations = g.railStations.filter(s => s.cityIndex !== ia && s.cityIndex !== ib);
     g.railStations.push(best.A, best.B);
     g.railways.push(best.path);
@@ -2014,6 +2357,7 @@ function fieldSamplesOK(g, f) {
     if (h < WATER_LEVEL + 2.5) return false;
     if (roadAt(g, x, z) > 0.04) return false;
     if (railNear(g, x, z, 24)) return false;
+    if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 460) return false;
     if (h < mn) mn = h;
     if (h > mx) mx = h;
   }
@@ -2080,7 +2424,7 @@ function tryPlaceFieldCluster(g, rng, cx, cz, rot, cols, rows, cellW, cellD, lan
   const added = [];
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
-      if (g.fields.length + added.length >= 128 || rng() < 0.09) continue;
+      if (g.fields.length + added.length >= FIELD_CAP || rng() < 0.04) continue;
       const lc = localCenter(i, j);
       const x = cx + lc[0] * c - lc[1] * s;
       const z = cz + lc[0] * s + lc[1] * c;
@@ -2189,14 +2533,14 @@ function genFarmsteads(g, rng) {
   for (const road of g.roads) {
     if (road[0] && road[0].cityLink) continue;
     for (let i = 10; i < road.length - 8; i += 27) {
-      if (g.farmsteads.length >= 22) break;
+      if (g.farmsteads.length >= 34) break;
       addRoadFarm(g, rng, road, i, (i / 27) % 2 < 1 ? -1 : 1);
     }
   }
 }
 
 function tryPlaceRoadField(g, rng, road, i, side, backDepth) {
-  if (g.fields.length >= 165) return null;
+  if (g.fields.length >= FIELD_CAP) return null;
   const p = road[i];
   if (p.bridge) return null;
   const a = road[Math.max(0, i - 1)], b = road[Math.min(road.length - 1, i + 1)];
@@ -2204,7 +2548,7 @@ function tryPlaceRoadField(g, rng, road, i, side, backDepth) {
   const ul = Math.hypot(ux, uz) || 1;
   ux /= ul; uz /= ul;
   const nx = -uz * side, nz = ux * side;
-  const w = 132 + rng() * 84, d = 88 + rng() * 62;
+  const w = 170 + rng() * 95, d = 112 + rng() * 70;
   const off = 45 + (backDepth || 0) + d * 0.5;
   const x = p.x + nx * off, z = p.z + nz * off;
   const f = Object.assign({
@@ -2242,15 +2586,16 @@ function genFields(g, rng) {
 
   /* 先形成村庄外围的田块组团，农舍已经独立位于公路边。 */
   for (const v of g.villages) {
-    const blocks = 1 + (rng() < 0.58 ? 1 : 0);
+    const blocks = 2 + (rng() < 0.48 ? 1 : 0);
     for (let ci = 0; ci < blocks; ci++) {
-      for (let t = 0; t < 18; t++) {
+      for (let t = 0; t < 28; t++) {
         const ang = rng() * 6.2832;
         const dist = v.r * (1.34 + rng() * 1.5);
         const cx = v.x + Math.cos(ang) * dist, cz = v.z + Math.sin(ang) * dist;
         const rot = ang + Math.PI * 0.5 + (rng() - 0.5) * 0.26;
-        if (tryPlaceFieldCluster(g, rng, cx, cz, rot, 2, 2,
-          142 + rng() * 46, 102 + rng() * 36, 16 + rng() * 9)) break;
+        if (tryPlaceFieldCluster(g, rng, cx, cz, rot,
+          2 + (rng() < 0.36 ? 1 : 0), 2 + (rng() < 0.30 ? 1 : 0),
+          150 + rng() * 55, 108 + rng() * 46, 14 + rng() * 9)) break;
       }
     }
   }
@@ -2258,55 +2603,292 @@ function genFields(g, rng) {
   /* 再沿每条公路长出一排排地籍带，田地不再围绕任何一栋房子。 */
   for (const road of g.roads) {
     if (road[0] && road[0].cityLink) continue;
-    if (g.fields.length >= 165) break;
-    for (let i = 4; i < road.length - 4 && g.fields.length < 165; i += 7) {
+    if (g.fields.length >= FIELD_CAP) break;
+    for (let i = 4; i < road.length - 4 && g.fields.length < FIELD_CAP; i += 5) {
       for (const side of [-1, 1]) {
-        if (rng() > 0.74) continue;
+        if (rng() > 0.87) continue;
         const first = tryPlaceRoadField(g, rng, road, i, side, 0);
-        if (first && rng() < 0.42) {
+        if (first && rng() < 0.62) {
           tryPlaceRoadField(g, rng, road, i, side, first.d + 13 + rng() * 10);
+          if (rng() < 0.24) {
+            tryPlaceRoadField(g, rng, road, i, side, first.d * 2 + 24 + rng() * 12);
+          }
         }
       }
+    }
+  }
+
+  /* 平原农业带：在长路之间的平缓腹地补成片田块，避免只能沿路看到细碎小田。 */
+  for (let pi = 0; pi < 48 && g.fields.length < FIELD_CAP - 6; pi++) {
+    const road = g.roads[(rng() * g.roads.length) | 0];
+    if (!road || road.length < 12 || (road[0] && road[0].cityLink)) continue;
+    const p = road[5 + ((rng() * Math.max(1, road.length - 10)) | 0)];
+    if (!p || p.bridge) continue;
+    const ang = rng() * 6.2832, dist = 260 + rng() * 760;
+    const cx = p.x + Math.cos(ang) * dist, cz = p.z + Math.sin(ang) * dist;
+    if (rawHeight(g, cx, cz) < WATER_LEVEL + 5) continue;
+    tryPlaceFieldCluster(g, rng, cx, cz, rng() * Math.PI,
+      2 + (rng() < 0.4 ? 1 : 0), 2 + (rng() < 0.36 ? 1 : 0),
+      160 + rng() * 60, 116 + rng() * 50, 15 + rng() * 9);
+  }
+
+  /* 最后补一轮路侧田块，保证不同地形条件下平原也有稳定的农业密度。 */
+  for (let fi = 0; fi < 420 && g.fields.length < 350; fi++) {
+    const road = g.roads[(rng() * g.roads.length) | 0];
+    if (!road || road.length < 12 || (road[0] && road[0].cityLink)) continue;
+    const i = 5 + ((rng() * Math.max(1, road.length - 10)) | 0);
+    const p = road[i];
+    if (!p || p.bridge) continue;
+    const side = rng() < 0.5 ? -1 : 1;
+    const backDepth = (fi % 3) * (82 + rng() * 34);
+    tryPlaceRoadField(g, rng, road, i, side, backDepth);
+  }
+
+  /* 平原农业区：用粗网格扫描剩余空地，整片生成 3×3 左右的地籍组团。 */
+  let districts = 0;
+  for (let gz = -3900; gz <= 3900 && districts < 68 && g.fields.length < FIELD_CAP; gz += 680) {
+    for (let gx = -3900; gx <= 3900 && districts < 68 && g.fields.length < FIELD_CAP; gx += 680) {
+      const cx = gx + (rng() - 0.5) * 260;
+      const cz = gz + (rng() - 0.5) * 260;
+      const h = rawHeight(g, cx, cz);
+      if (h < WATER_LEVEL + 6 || h > 285) continue;
+      if (Math.hypot(cx - SPAWN_X, cz - SPAWN_Z) < 680) continue;
+      let blocked = false;
+      for (const ct of g.cities) {
+        if (Math.hypot((cx - ct.x) / ct.rx, (cz - ct.z) / ct.rz) < 1.24) { blocked = true; break; }
+      }
+      if (!blocked) for (const v of g.villages) {
+        if (Math.hypot(cx - v.x, cz - v.z) < v.r * 1.42) { blocked = true; break; }
+      }
+      if (blocked) continue;
+      const cols = 2 + (rng() < 0.62 ? 1 : 0);
+      const rows = 2 + (rng() < 0.58 ? 1 : 0);
+      const rot = rng() * Math.PI;
+      if (tryPlaceFieldCluster(g, rng, cx, cz, rot, cols, rows,
+        168 + rng() * 65, 124 + rng() * 48, 13 + rng() * 9) >= 3) districts++;
     }
   }
 
   /* 城市外围补少量独立田块，不形成统一“农庄广场”。 */
   for (const ct of g.cities) {
     const rg = Math.max(ct.rx, ct.rz);
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 10; i++) {
       tryPlaceField(g, rng, ct.x, ct.z, rg * 1.16, rg * 1.78, 45, -1);
     }
   }
 }
 
-/* ---- 树林：6~8 片密林（椭圆斑块，避开城市 / 村庄 / 其他林 / 出生地） ---- */
+/* ---- 树林：多核心生态斑块（不规则的林核 / 林缘 / 空地 / 侵入草甸） ---- */
 function genForests(g, rng) {
-  const count = 10 + ((rng() * 5) | 0);          // 10~14 片
+  g.forests = [];
+  const count = 8 + ((rng() * 4) | 0);
   for (let i = 0; i < count; i++) {
-    for (let t = 0; t < 140; t++) {
-      const a = 260 + rng() * 320, b = 200 + rng() * 260;
-      const x = (rng() * 2 - 1) * (WORLD_HALF - a - 200);
-      const z = (rng() * 2 - 1) * (WORLD_HALF - b - 200);
+    for (let t = 0; t < 180; t++) {
+      const a = 410 + rng() * 330, b = 310 + rng() * 280;
+      const x = (rng() * 2 - 1) * (WORLD_HALF - a - 220);
+      const z = (rng() * 2 - 1) * (WORLD_HALF - b - 220);
       const rot = rng() * Math.PI;
       let ok = true;
       for (const ct of g.cities) {
-        if (Math.hypot(x - ct.x, z - ct.z) < ct.rx * 0.9 + a) { ok = false; break; }
+        if (Math.hypot(x - ct.x, z - ct.z) < ct.rx * 0.92 + a * 0.72) { ok = false; break; }
       }
       if (ok) for (const v of g.villages) {
-        if (Math.hypot(x - v.x, z - v.z) < v.r + a * 0.88) { ok = false; break; }
+        if (Math.hypot(x - v.x, z - v.z) < v.r + a * 0.68) { ok = false; break; }
       }
       if (ok) for (const fs of (g.farmsteads || [])) {
-        if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.8 + a * 0.35) { ok = false; break; }
+        if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.8 + a * 0.28) { ok = false; break; }
       }
       if (ok) for (const f of g.forests) {
-        if (Math.hypot(x - f.x, z - f.z) < (a + f.a) * 0.72) { ok = false; break; }
+        if (Math.hypot(x - f.x, z - f.z) < (a + f.a) * 0.68) { ok = false; break; }
       }
       if (!ok) continue;
-      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 700) continue;
+      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 760) continue;
       const h0 = rawHeight(g, x, z);
-      if (h0 < WATER_LEVEL + 8 || h0 > 300) continue;
-      if (railNear(g, x, z, a * 0.18 + 30)) continue;
-      g.forests.push({ x, z, a, b, rot, cr: Math.cos(rot), sr: Math.sin(rot) });
+      if (h0 < WATER_LEVEL + 8 || h0 > 360) continue;
+      if (railNear(g, x, z, a * 0.16 + 30)) continue;
+
+      const lobes = [{
+        x: (rng() - 0.5) * a * 0.12, z: (rng() - 0.5) * b * 0.12,
+        rx: a * (0.42 + rng() * 0.12), rz: b * (0.38 + rng() * 0.12),
+        rot: (rng() - 0.5) * 0.5, w: 1.05 + rng() * 0.22
+      }];
+      const lobeCount = 5 + ((rng() * 5) | 0);
+      for (let k = 0; k < lobeCount; k++) {
+        const ang = rng() * 6.2832;
+        const rr = Math.sqrt(rng()) * 0.92;
+        const lrx = a * (0.18 + rng() * 0.22);
+        const lrz = b * (0.17 + rng() * 0.22);
+        lobes.push({
+          x: Math.cos(ang) * rr * a * 0.78,
+          z: Math.sin(ang) * rr * b * 0.76,
+          rx: lrx, rz: lrz, rot: (rng() - 0.5) * 1.2,
+          w: 0.36 + rng() * 0.46
+        });
+      }
+      const clearings = [];
+      const clearingCount = 2 + ((rng() * 4) | 0);
+      for (let k = 0; k < clearingCount; k++) {
+        clearings.push({
+          x: (rng() - 0.5) * a * 1.05,
+          z: (rng() - 0.5) * b * 1.05,
+          rx: 45 + rng() * 105, rz: 35 + rng() * 85,
+          rot: rng() * Math.PI
+        });
+      }
+      for (const l of lobes) { l.cr = Math.cos(l.rot); l.sr = Math.sin(l.rot); }
+      for (const c of clearings) { c.cr = Math.cos(c.rot); c.sr = Math.sin(c.rot); }
+      g.forests.push({
+        x, z, a, b, rot, cr: Math.cos(rot), sr: Math.sin(rot),
+        seed: (g.seed ^ (0x3C21 + i * 7919)) >>> 0, lobes, clearings
+      });
+      break;
+    }
+  }
+  /* 少量林间小树丛，让林地之外也有自然过渡。 */
+  for (let i = 0; i < 7; i++) {
+    const x = (rng() * 2 - 1) * (WORLD_HALF - 500);
+    const z = (rng() * 2 - 1) * (WORLD_HALF - 500);
+    const h0 = rawHeight(g, x, z);
+    if (h0 < WATER_LEVEL + 6 || h0 > 360) continue;
+    if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 620) continue;
+    let blocked = roadAt(g, x, z) > 0.02 || railNear(g, x, z, 60);
+    if (!blocked) for (const v of g.villages) {
+      if (Math.hypot(x - v.x, z - v.z) < v.r * 1.15) { blocked = true; break; }
+    }
+    if (!blocked) for (const fs of (g.farmsteads || [])) {
+      if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.4) { blocked = true; break; }
+    }
+    if (blocked) continue;
+    const r = 80 + rng() * 110;
+    g.forests.push({
+      x, z, a: r * 1.35, b: r, rot: rng() * Math.PI,
+      cr: 1, sr: 0, seed: (g.seed ^ (0x71A2 + i * 3413)) >>> 0,
+      lobes: [{
+        x: 0, z: 0, rx: r * 0.9, rz: r * 0.62, rot: 0, cr: 1, sr: 0, w: 0.92
+      }],
+      clearings: []
+    });
+    g.forests[g.forests.length - 1].cr = Math.cos(g.forests[g.forests.length - 1].rot);
+    g.forests[g.forests.length - 1].sr = Math.sin(g.forests[g.forests.length - 1].rot);
+  }
+}
+
+function forestCoverage(f, x, z) {
+  const dx = x - f.x, dz = z - f.z;
+  const lx = f.cr * dx + f.sr * dz, lz = -f.sr * dx + f.cr * dz;
+  if (Math.abs(lx) > f.a * 1.24 || Math.abs(lz) > f.b * 1.20) return 0;
+  let cover = 0;
+  for (let i = 0; i < f.lobes.length; i++) {
+    const l = f.lobes[i];
+    const ax = lx - l.x, az = lz - l.z;
+    const px = l.cr * ax + l.sr * az, pz = -l.sr * ax + l.cr * az;
+    const q = Math.hypot(px / l.rx, pz / l.rz);
+    if (q < 1.55) {
+      const t = 1 - q / 1.55;
+      cover += t * t * l.w;
+    }
+  }
+  const edgeNoise = fbm(x * 0.0041, z * 0.0041, f.seed ^ 0x51B7, 3) - 0.5;
+  cover += edgeNoise * 0.42;
+  for (let i = 0; i < f.clearings.length; i++) {
+    const c = f.clearings[i];
+    const ax = lx - c.x, az = lz - c.z;
+    const px = c.cr * ax + c.sr * az, pz = -c.sr * ax + c.cr * az;
+    const q = Math.hypot(px / c.rx, pz / c.rz);
+    if (q < 1.18) cover *= smoothstep(0.18, 1.18, q);
+  }
+  return Math.max(0, Math.min(1, cover));
+}
+
+function pointInGeneratedField(f, x, z) {
+  const c = Math.cos(-f.rot), s = Math.sin(-f.rot);
+  const lx = (x - f.x) * c - (z - f.z) * s;
+  const lz = (x - f.x) * s + (z - f.z) * c;
+  let inside = false;
+  for (let i = 0, j = f.poly.length - 1; i < f.poly.length; j = i++) {
+    const xi = f.poly[i][0], zi = f.poly[i][1];
+    const xj = f.poly[j][0], zj = f.poly[j][1];
+    if ((zi > lz) !== (zj > lz) &&
+        lx < (xj - xi) * (lz - zi) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function meadowCoverage(m, x, z) {
+  if (Math.abs(x - m.x) > m.a * 1.22 || Math.abs(z - m.z) > m.b * 1.22) return 0;
+  let cover = 0;
+  for (let i = 0; i < m.lobes.length; i++) {
+    const l = m.lobes[i];
+    const c = Math.cos(l.rot), s = Math.sin(l.rot);
+    const dx = x - l.x, dz = z - l.z;
+    const lx = c * dx + s * dz, lz = -s * dx + c * dz;
+    const q = Math.hypot(lx / l.rx, lz / l.rz);
+    if (q < 1.45) {
+      const t = 1 - q / 1.45;
+      cover += t * t * l.w;
+    }
+  }
+  cover += (fbm(x * 0.0052, z * 0.0052, m.seed ^ 0x7431, 3) - 0.5) * 0.24;
+  return Math.max(0, Math.min(1, cover));
+}
+
+function genMeadows(g, rng) {
+  g.meadows = [];
+  const count = 46 + ((rng() * 12) | 0);
+  for (let i = 0; i < count; i++) {
+    for (let t = 0; t < 120; t++) {
+      const a = 380 + rng() * 300, b = 300 + rng() * 250;
+      const x = (rng() * 2 - 1) * (WORLD_HALF - a - 180);
+      const z = (rng() * 2 - 1) * (WORLD_HALF - b - 180);
+      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 680) continue;
+      const h0 = rawHeight(g, x, z);
+      if (h0 < WATER_LEVEL + 6 || h0 > 330) continue;
+      if (railNear(g, x, z, 48)) continue;
+      let blocked = false;
+      for (const ct of g.cities) {
+        if (Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz) < 1.18) { blocked = true; break; }
+      }
+      if (!blocked) for (const v of g.villages) {
+        if (Math.hypot(x - v.x, z - v.z) < v.r * 1.28) { blocked = true; break; }
+      }
+      if (blocked) continue;
+
+      const lobes = [];
+      const lobeCount = 4 + ((rng() * 4) | 0);
+      for (let k = 0; k < lobeCount; k++) {
+        const ang = rng() * 6.2832, rr = Math.sqrt(rng()) * 0.82;
+        lobes.push({
+          x: x + Math.cos(ang) * rr * a * 0.72,
+          z: z + Math.sin(ang) * rr * b * 0.72,
+          rx: 95 + rng() * 150, rz: 82 + rng() * 125,
+          rot: rng() * Math.PI, w: 0.42 + rng() * 0.48
+        });
+      }
+
+      let fieldHits = 0, forestHits = 0, probes = 0;
+      for (const l of lobes) {
+        const c = Math.cos(l.rot), s = Math.sin(l.rot);
+        const localProbes = [[0, 0], [l.rx * 0.55, 0], [-l.rx * 0.55, 0], [0, l.rz * 0.55], [0, -l.rz * 0.55]];
+        for (const p of localProbes) {
+          const px = l.x + c * p[0] - s * p[1];
+          const pz = l.z + s * p[0] + c * p[1];
+          if (fieldHits < 4) {
+            for (const f of g.fields) {
+              if (Math.hypot(px - f.x, pz - f.z) > f.rad + Math.max(l.rx, l.rz)) continue;
+              if (pointInGeneratedField(f, px, pz)) { fieldHits++; break; }
+            }
+          }
+          for (const f of g.forests) {
+            if (forestCoverage(f, px, pz) > 0.20) { forestHits++; break; }
+          }
+          probes++;
+        }
+      }
+      if (fieldHits > Math.max(2, probes * 0.12) || forestHits > probes * 0.18) continue;
+
+      g.meadows.push({
+        x, z, a, b, seed: (g.seed ^ (0x7139 + i * 6151)) >>> 0, lobes
+      });
       break;
     }
   }
@@ -2342,34 +2924,140 @@ function genRocks(g, rng) {
   }
 }
 
+/* ---- 山体高度场：先生成解析山形，再低通 + 限坡，避免连续竖直断崖 ---- */
+function mountainContribution(g, m, x, z) {
+  const dx = x - m.x, dz = z - m.z;
+  const rx = m.cr * dx + m.sr * dz, rz = -m.sr * dx + m.cr * dz;
+  const md = Math.hypot(rx / m.mrx, rz / m.mrz);
+  if (md >= 1.36) return 0;
+
+  const along = Math.max(0, Math.min(1, rx / (m.mrx * 1.18) * 0.5 + 0.5));
+  const ridgeSeed = (g.seed ^ 0xA771 ^ ((m.ridgePhase * 10000) | 0)) >>> 0;
+  const ridgeCurve = Math.sin(along * Math.PI * 2.2 + m.ridgePhase) * m.mrz * m.ridgeBend +
+    (fbm(along * 4.3, 0.37, ridgeSeed, 2) - 0.5) * m.mrz * 0.30;
+  const cross = Math.abs(rz - ridgeCurve) / Math.max(1, m.mrz * m.ridgeW);
+  const endTaper = smoothstep(0, 0.15, along) * (1 - smoothstep(0.84, 1, along));
+  const footFade = smoothstep(1.36, 1.02, md);
+  const ridge = smoothstep(1.34, 0.10, cross) * endTaper * footFade;
+  const base = smoothstep(1.22, 0.34, md);
+  const env = Math.max(base * 0.66, ridge);
+  if (env < 0.0015) return 0;
+
+  const detail = ridgedNoise(x * 0.0027, z * 0.0027, ridgeSeed ^ 0x6D2B, 4);
+  const broad = fbm(x * 0.00135, z * 0.00135, ridgeSeed ^ 0x51ED, 3);
+  const gullies = 1 - 0.12 * Math.pow(1 - ridgedNoise(x * 0.0068, z * 0.0068, ridgeSeed ^ 0x2C1B, 3), 2);
+  let add = m.amp * env * (0.70 + detail * 0.27 + (broad - 0.5) * 0.14) * gullies;
+
+  for (const p of m.peaks) {
+    const pc = Math.cos(p.rot), ps = Math.sin(p.rot);
+    const pdx = rx - p.x, pdz = rz - p.z;
+    const px = pc * pdx + ps * pdz, pz = -ps * pdx + pc * pdz;
+    const q = Math.hypot(px / p.rx, pz / p.rz);
+    if (q >= 1) continue;
+    const core = Math.pow(1 - q, 1.32);
+    add += p.amp * core * (0.78 + ridgedNoise(x * 0.0045, z * 0.0045, ridgeSeed ^ 0x77A1, 3) * 0.36);
+  }
+  return Math.max(0, add);
+}
+
+function blurMountainGrid(src, nx, nz, passes) {
+  let a = src, b = new Float64Array(src.length);
+  for (let pass = 0; pass < passes; pass++) {
+    for (let j = 0; j < nz; j++) {
+      const jm = Math.max(0, j - 1), jp = Math.min(nz - 1, j + 1);
+      for (let i = 0; i < nx; i++) {
+        const im = Math.max(0, i - 1), ip = Math.min(nx - 1, i + 1);
+        const at = (ii, jj) => a[jj * nx + ii];
+        const sum = at(i, j) * 4 +
+          (at(im, j) + at(ip, j) + at(i, jm) + at(i, jp)) * 2 +
+          at(im, jm) + at(ip, jm) + at(im, jp) + at(ip, jp);
+        b[j * nx + i] = sum / 16;
+      }
+    }
+    const t = a; a = b; b = t;
+  }
+  return a;
+}
+
+function limitMountainGridSlope(src, nx, nz, dx, dz) {
+  let a = src, b = new Float64Array(src.length);
+  const maxX = dx * 0.84, maxZ = dz * 0.84;
+  for (let pass = 0; pass < 12; pass++) {
+    let changed = 0;
+    for (let j = 0; j < nz; j++) {
+      for (let i = 0; i < nx; i++) {
+        const idx = j * nx + i;
+        let cap = Infinity;
+        if (i > 0) cap = Math.min(cap, a[idx - 1] + maxX);
+        if (i + 1 < nx) cap = Math.min(cap, a[idx + 1] + maxX);
+        if (j > 0) cap = Math.min(cap, a[idx - nx] + maxZ);
+        if (j + 1 < nz) cap = Math.min(cap, a[idx + nx] + maxZ);
+        if (a[idx] > cap) {
+          b[idx] = cap;
+          changed++;
+        } else {
+          b[idx] = a[idx];
+        }
+      }
+    }
+    const t = a; a = b; b = t;
+    if (!changed) break;
+  }
+  return a;
+}
+
+function buildMountainField(g, m) {
+  const ex = Math.abs(m.cr) * m.mrx * 1.40 + Math.abs(m.sr) * m.mrz * 1.40;
+  const ez = Math.abs(m.sr) * m.mrx * 1.40 + Math.abs(m.cr) * m.mrz * 1.40;
+  const nx = 129, nz = 129;
+  const x0 = m.x - ex, z0 = m.z - ez;
+  const dx = ex * 2 / (nx - 1), dz = ez * 2 / (nz - 1);
+  let data = new Float64Array(nx * nz);
+  for (let j = 0; j < nz; j++) {
+    const z = z0 + j * dz;
+    for (let i = 0; i < nx; i++) {
+      data[j * nx + i] = mountainContribution(g, m, x0 + i * dx, z);
+    }
+  }
+  data = blurMountainGrid(data, nx, nz, 2);
+  data = limitMountainGridSlope(data, nx, nz, dx, dz);
+  data = blurMountainGrid(data, nx, nz, 1);
+  m.field = { nx, nz, x0, z0, dx, dz, data };
+}
+
+function sampleMountainField(m, x, z) {
+  const f = m.field;
+  if (!f) return 0;
+  const fx = (x - f.x0) / f.dx;
+  const fz = (z - f.z0) / f.dz;
+  if (fx <= 0 || fz <= 0 || fx >= f.nx - 1 || fz >= f.nz - 1) return 0;
+  const ix = fx | 0, iz = fz | 0;
+  const tx = fx - ix, tz = fz - iz;
+  const i0 = iz * f.nx + ix, i1 = i0 + f.nx;
+  const a = f.data[i0] + (f.data[i0 + 1] - f.data[i0]) * tx;
+  const b = f.data[i1] + (f.data[i1 + 1] - f.data[i1]) * tx;
+  return a + (b - a) * tz;
+}
+
 /* ---- 地形高度（分层叠加，逐层由种子参数驱动） ---- */
 function rawHeight(g, x, z) {
   let h = 70 + (fbm(x * 0.00055, z * 0.00055, g.seed ^ 0x9E37, 3) - 0.5) * 130;
   h += (vnoise(x * 0.0021, z * 0.0021, g.seed ^ 0x51ED) - 0.5) * 16;
 
-  for (const m of g.mountains) {
-    const dx = x - m.x, dz = z - m.z;
-    const rx = m.cr * dx + m.sr * dz, rz = -m.sr * dx + m.cr * dz;
-    const md = Math.hypot(rx / m.mrx, rz / m.mrz);
-    if (md < 1) {
-      const mask = 1 - md;
-      const mm = mask * mask * (1 - mask * 0.25);
-      h += mm * m.amp;
-      h += Math.sin(x * m.f1 + m.p1) * Math.cos(z * m.f1 * 0.9 + m.p1 * 0.7) * mm * m.amp * 0.34;
-      h += Math.sin(x * m.f2 + m.p2) * Math.cos(z * m.f2 * 0.85) * mm * m.amp * 0.10;
-      h += (vnoise(x * 0.0021, z * 0.0021, (g.seed ^ 0xA771) >>> 0) - 0.5) * mm * m.amp * 0.38;
-    }
-  }
+  for (const m of g.mountains) h += sampleMountainField(m, x, z);
 
   for (const r of g.rivers) {
     const c = r.dir === 'z' ? z : x;
     const cen = r.base + Math.sin(c * r.f1 + r.ph1) * r.a1 + Math.sin(c * r.f2 + r.ph2) * r.a2;
     const d = Math.abs((r.dir === 'z' ? x : z) - cen);
-    if (d < r.w * 4.8) {
-      const flood = smoothstep(r.w * 4.8, r.w * 1.9, d) * 0.72;
+    const alpine = smoothstep(70, 390, h);
+    const bankW = r.w * (4.8 + alpine * 4.2);
+    const coreW = r.w * (1.9 + alpine * 0.82);
+    if (d < bankW) {
+      const flood = smoothstep(bankW, coreW * 1.55, d) * (0.72 + alpine * 0.06);
       h = h * (1 - flood) + 12 * flood;
-      if (d < r.w * 1.9) {
-        const t = smoothstep(r.w * 1.9, r.w * 0.72, d);
+      if (d < coreW) {
+        const t = smoothstep(coreW, r.w * 0.72, d);
         h = h * (1 - t) + (-22 + Math.sin(c * 0.008) * 3.5) * t;
       }
     }
@@ -2380,8 +3068,10 @@ function rawHeight(g, x, z) {
     const d = Math.hypot(dx, dz);
     const ang = Math.atan2(dz, dx);
     const lr = l.r * (1 + Math.sin(ang * 3 + l.h1p) * l.h1a + Math.sin(ang * 5 + l.h2p) * l.h2a);
-    if (d < lr * 1.75) {
-      const t = smoothstep(lr * 1.75, lr * 0.55, d);
+    const alpineLake = smoothstep(70, 390, h);
+    const bank = lr * (1.75 + alpineLake * 0.9);
+    if (d < bank) {
+      const t = smoothstep(bank, lr * (0.55 + alpineLake * 0.12), d);
       h = h * (1 - t) + (-20 + Math.sin(ang * 4) * 3) * t;
     }
   }
@@ -2411,9 +3101,8 @@ function rawHeight(g, x, z) {
   return h;
 }
 
-/* ---- 对外地形高度：基础地形 → 道路走廊压平 ---- */
-function terrainHeight(x, z) {
-  const g = GEN;
+/* ---- 地形分层：基础地形 → 道路 / 铁路 / 站场 / 农庄压平 ---- */
+function terrainHeightBase(g, x, z) {
   let h = rawHeight(g, x, z);
   if (g.roadN && g.roadW) {
     const w = sampleRoadField(g, x, z);
@@ -2442,6 +3131,119 @@ function terrainHeight(x, z) {
     }
   }
   return h;
+}
+
+function sampleTerrainHeightGrid(g, x, z) {
+  const f = g.heightGrid;
+  if (!f) return terrainHeightBase(g, x, z);
+  const fx = (x - f.x0) / f.dx;
+  const fz = (z - f.z0) / f.dz;
+  const ix = Math.max(0, Math.min(f.n - 2, Math.floor(fx)));
+  const iz = Math.max(0, Math.min(f.n - 2, Math.floor(fz)));
+  const tx = Math.max(0, Math.min(1, fx - ix));
+  const tz = Math.max(0, Math.min(1, fz - iz));
+  const i0 = iz * f.n + ix, i1 = i0 + f.n;
+  const a = f.data[i0] + (f.data[i0 + 1] - f.data[i0]) * tx;
+  const b = f.data[i1] + (f.data[i1 + 1] - f.data[i1]) * tx;
+  return a + (b - a) * tz;
+}
+
+/* ---- 最终地形烘焙：只削掉陡壁，并让视觉、碰撞和布点读取同一高度场 ---- */
+function bakeTerrainHeightGrid(g) {
+  const n = 512;
+  const x0 = -WORLD_HALF, z0 = -WORLD_HALF;
+  const dx = WORLD_HALF * 2 / (n - 1), dz = dx;
+  let data = new Float32Array(n * n);
+  for (let iz = 0; iz < n; iz++) {
+    const z = z0 + iz * dz;
+    for (let ix = 0; ix < n; ix++) {
+      data[iz * n + ix] = terrainHeightBase(g, x0 + ix * dx, z);
+    }
+  }
+
+  /* 局部差异驱动的低通：平地几乎不动，只对可能形成断崖的格子增加平滑。 */
+  let buf = new Float32Array(n * n);
+  for (let pass = 0; pass < 3; pass++) {
+    for (let iz = 1; iz < n - 1; iz++) {
+      for (let ix = 1; ix < n - 1; ix++) {
+        const k = iz * n + ix;
+        const h = data[k];
+        const avg = (data[k - 1] + data[k + 1] + data[k - n] + data[k + n]) * 0.25;
+        const md = Math.max(Math.abs(h - data[k - 1]), Math.abs(h - data[k + 1]),
+          Math.abs(h - data[k - n]), Math.abs(h - data[k + n]));
+        const w = 0.03 + smoothstep(6, 42, md) * 0.42;
+        buf[k] = h * (1 - w) + avg * w;
+      }
+    }
+    for (let ix = 0; ix < n; ix++) {
+      buf[ix] = data[ix];
+      buf[(n - 1) * n + ix] = data[(n - 1) * n + ix];
+    }
+    for (let iz = 0; iz < n; iz++) {
+      buf[iz * n] = data[iz * n];
+      buf[iz * n + n - 1] = data[iz * n + n - 1];
+    }
+    const t = data; data = buf; buf = t;
+  }
+
+  /* 统一最大坡率：只从高格向下削，保留河谷和城市 / 站场平台。 */
+  const maxStep = dx * 1.02;
+  for (let pass = 0; pass < 4; pass++) {
+    for (let iz = 0; iz < n; iz++) {
+      const row = iz * n;
+      let prev = data[row];
+      for (let ix = 1; ix < n; ix++) {
+        const k = row + ix;
+        if (data[k] > prev + maxStep) data[k] = prev + maxStep;
+        prev = data[k];
+      }
+      prev = data[row + n - 1];
+      for (let ix = n - 2; ix >= 0; ix--) {
+        const k = row + ix;
+        if (data[k] > prev + maxStep) data[k] = prev + maxStep;
+        prev = data[k];
+      }
+    }
+    for (let ix = 0; ix < n; ix++) {
+      let prev = data[ix];
+      for (let iz = 1; iz < n; iz++) {
+        const k = iz * n + ix;
+        if (data[k] > prev + maxStep) data[k] = prev + maxStep;
+        prev = data[k];
+      }
+      prev = data[(n - 1) * n + ix];
+      for (let iz = n - 2; iz >= 0; iz--) {
+        const k = iz * n + ix;
+        if (data[k] > prev + maxStep) data[k] = prev + maxStep;
+        prev = data[k];
+      }
+    }
+  }
+
+  /* 最后一次轻平滑，消除限坡后的折线感。 */
+  for (let iz = 1; iz < n - 1; iz++) {
+    for (let ix = 1; ix < n - 1; ix++) {
+      const k = iz * n + ix;
+      buf[k] = data[k] * 0.82 +
+        (data[k - 1] + data[k + 1] + data[k - n] + data[k + n]) * 0.045;
+    }
+  }
+  for (let ix = 0; ix < n; ix++) {
+    buf[ix] = data[ix];
+    buf[(n - 1) * n + ix] = data[(n - 1) * n + ix];
+  }
+  for (let iz = 0; iz < n; iz++) {
+    buf[iz * n] = data[iz * n];
+    buf[iz * n + n - 1] = data[iz * n + n - 1];
+  }
+  g.heightGrid = { n, x0, z0, dx, dz, data: buf };
+}
+
+/* ---- 对外地形高度：生成阶段读取分层高度，烘焙后统一读取平滑高度场 ---- */
+function terrainHeight(x, z) {
+  const g = GEN;
+  if (g.heightGrid) return sampleTerrainHeightGrid(g, x, z);
+  return terrainHeightBase(g, x, z);
 }
 
 /* ---- 地形配色（逐档锁定值） ---- */
@@ -2510,9 +3312,7 @@ function pickUnitSpot(minSep, others) {
       }
       if (!ok) continue;
       for (const fo of GEN.forests) {
-        const dx = (x - fo.x) / Math.max(60, fo.a * 0.95);
-        const dz = (z - fo.z) / Math.max(60, fo.b * 0.95);
-        if (dx * dx + dz * dz < 1) { ok = false; break; }
+        if (forestCoverage(fo, x, z) > 0.22) { ok = false; break; }
       }
       if (!ok) continue;
       const hs = [
@@ -2561,6 +3361,19 @@ function createTerrain() {
     pos.setY(i, h);
     terrainColor(h, tmp);
 
+    /* 草甸 / 牧场：在连续农田之外用暖绿草色和野花斑块打散纯绿底。 */
+    for (const md of (GEN.meadows || [])) {
+      const cov = meadowCoverage(md, x, z);
+      if (cov <= 0.045) continue;
+      const w = smoothstep(0.045, 0.68, cov) * 0.64;
+      const flower = fbm(x * 0.008, z * 0.008, md.seed ^ 0x5A17, 2);
+      const bloom = smoothstep(0.58, 0.72,
+        fbm(x * 0.016, z * 0.016, md.seed ^ 0x2C7D, 2)) * w;
+      tmp[0] = tmp[0] * (1 - w) + (0.47 + flower * 0.16) * w + bloom * 0.035;
+      tmp[1] = tmp[1] * (1 - w) + (0.52 + flower * 0.10) * w;
+      tmp[2] = tmp[2] * (1 - w) + (0.28 + flower * 0.07) * w + bloom * 0.045;
+    }
+
     /* 城市区域：水泥色地面 */
     for (const ct of GEN.cities) {
       const cd = Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz);
@@ -2583,17 +3396,15 @@ function createTerrain() {
       }
     }
 
-    /* 林区地面：压暗成森林色 */
+    /* 林区地面：按生态覆盖度做渐变，不再给整片椭圆统一刷成深绿。 */
     for (const f of GEN.forests) {
-      const dx = x - f.x, dz = z - f.z;
-      const lx = f.cr * dx + f.sr * dz, lz = -f.sr * dx + f.cr * dz;
-      const fd = Math.hypot(lx / f.a, lz / f.b);
-      if (fd < 1.18) {
-        const w = smoothstep(1.18, 0.7, fd) * 0.38;
-        tmp[0] = tmp[0] * (1 - w) + 0.17 * w;
-        tmp[1] = tmp[1] * (1 - w) + 0.25 * w;
-        tmp[2] = tmp[2] * (1 - w) + 0.13 * w;
-      }
+      const cov = forestCoverage(f, x, z);
+      if (cov <= 0.035) continue;
+      const w = smoothstep(0.035, 0.76, cov) * 0.46;
+      const shade = 0.88 + vnoise(x * 0.014, z * 0.014, f.seed ^ 0x1D7) * 0.22;
+      tmp[0] = tmp[0] * (1 - w) + 0.14 * shade * w;
+      tmp[1] = tmp[1] * (1 - w) + 0.23 * shade * w;
+      tmp[2] = tmp[2] * (1 - w) + 0.11 * shade * w;
     }
 
     /* 地表色斑：干草 / 深草 / 裸土的低频斑块，压掉“一整块绿”的塑料感 */
@@ -2612,16 +3423,31 @@ function createTerrain() {
       tmp[2] *= 1 - dark * 0.20;
     }
 
-    /* 陡坡露岩：用有限差分估坡度，让山体不只是一整块绿色三角面。 */
+    /* 陡坡露岩 + 岩层色带 + 高山雪线：让山体有多层地质结构。 */
     const sx = terrainHeight(x + 16, z) - terrainHeight(x - 16, z);
     const sz = terrainHeight(x, z + 16) - terrainHeight(x, z - 16);
     const slope = Math.hypot(sx, sz) / 32;
     if (slope > 0.30) {
       const rock = smoothstep(0.30, 1.05, slope) * (h > 65 ? 0.72 : 0.46);
-      const rockTone = h > 390 ? 0.57 : 0.43;
-      tmp[0] = tmp[0] * (1 - rock) + rockTone * 0.96 * rock;
-      tmp[1] = tmp[1] * (1 - rock) + rockTone * 0.93 * rock;
-      tmp[2] = tmp[2] * (1 - rock) + rockTone * 0.88 * rock;
+      const band = 0.44 + 0.09 * Math.sin(h * 0.052 + fbm(x * 0.006, z * 0.006, GEN.seed ^ 0x4611, 2) * 8.0);
+      tmp[0] = tmp[0] * (1 - rock) + band * 1.04 * rock;
+      tmp[1] = tmp[1] * (1 - rock) + band * 0.96 * rock;
+      tmp[2] = tmp[2] * (1 - rock) + band * 0.88 * rock;
+    }
+    if (h > 300) {
+      const exposed = smoothstep(300, 510, h) * (0.32 + smoothstep(0.34, 0.92, slope) * 0.42);
+      const strata = 0.38 + 0.07 * Math.sin(h * 0.071 + vnoise(x * 0.009, z * 0.009, GEN.seed ^ 0x2F17) * 9.0);
+      tmp[0] = tmp[0] * (1 - exposed) + strata * 1.03 * exposed;
+      tmp[1] = tmp[1] * (1 - exposed) + strata * 0.99 * exposed;
+      tmp[2] = tmp[2] * (1 - exposed) + strata * 0.93 * exposed;
+    }
+    const snowLine = 475 + (fbm(x * 0.0047, z * 0.0047, GEN.seed ^ 0x7A31, 3) - 0.5) * 135;
+    if (h > snowLine - 45) {
+      const snow = smoothstep(snowLine - 30, snowLine + 72, h) *
+        (1 - smoothstep(0.72, 1.48, slope) * 0.72);
+      tmp[0] = tmp[0] * (1 - snow) + 0.88 * snow;
+      tmp[1] = tmp[1] * (1 - snow) + 0.92 * snow;
+      tmp[2] = tmp[2] * (1 - snow) + 0.97 * snow;
     }
 
     const n = (vnoise(x * 0.013, z * 0.013, (GEN.seed ^ 0x6D2B) >>> 0) - 0.5) * 0.075;
@@ -2633,6 +3459,7 @@ function createTerrain() {
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
   worldTerrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  worldTerrain.castShadow = true;
   worldTerrain.receiveShadow = true;
   scene.add(worldTerrain);
 }
@@ -2798,7 +3625,8 @@ function createSky() {
         c += sunColor * pow(sd, 18.0) * 0.045;
         gl_FragColor = vec4(c, 1.0); }`
   });
-  scene.add(new THREE.Mesh(geo, mat));
+  worldSky = new THREE.Mesh(geo, mat);
+  scene.add(worldSky);
 }
 
 let cloudAssets = null;
@@ -2825,6 +3653,83 @@ function createClouds() {
     scene.add(cl);
     worldClouds.push(cl);
   }
+}
+
+function applyLightingPreset(mode) {
+  if (!renderer) return;
+  const key = LIGHT_PRESETS[mode] ? mode : 'golden';
+  const p = LIGHT_PRESETS[key];
+  const prevTone = renderer.toneMapping;
+
+  renderer.toneMapping = p.toneMapping;
+  renderer.toneMappingExposure = p.exposure;
+  renderer.outputEncoding = p.outputEncoding;
+  renderer.domElement.style.filter = p.filter;
+  renderer.shadowMap.enabled = p.shadows;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+
+  if (gradeEl) gradeEl.className = p.grade;
+  if (scene && scene.fog) {
+    scene.fog.color.setHex(p.fog);
+    scene.fog.near = p.fogNear;
+    scene.fog.far = p.fogFar;
+  }
+
+  if (worldHemi) {
+    worldHemi.color.setHex(p.hemiSky);
+    worldHemi.groundColor.setHex(p.hemiGround);
+    worldHemi.intensity = p.hemiI;
+  }
+  if (worldSun) {
+    worldSun.color.setHex(p.sun);
+    worldSun.intensity = p.sunI;
+    worldSun.castShadow = p.shadows;
+    worldSun.shadow.mapSize.set(p.shadowMap, p.shadowMap);
+    worldSun.shadow.camera.left = -p.shadowCam;
+    worldSun.shadow.camera.right = p.shadowCam;
+    worldSun.shadow.camera.top = p.shadowCam;
+    worldSun.shadow.camera.bottom = -p.shadowCam;
+    worldSun.shadow.camera.near = 40;
+    worldSun.shadow.camera.far = key === 'war' ? 3200 : 3600;
+    worldSun.shadow.bias = key === 'war' ? -0.00022 : -0.00038;
+    worldSun.shadow.normalBias = key === 'war' ? 0.32 : 0.22;
+    worldSun.shadow.camera.updateProjectionMatrix();
+    SHADOW_SUN_OFFSET.set(p.shadowOffset[0], p.shadowOffset[1], p.shadowOffset[2]);
+  }
+  if (worldFill) {
+    worldFill.color.setHex(p.fill);
+    worldFill.intensity = p.fillI;
+  }
+
+  if (worldSky && worldSky.material && worldSky.material.uniforms) {
+    const u = worldSky.material.uniforms;
+    u.topColor.value.setHex(p.skyTop);
+    u.midColor.value.setHex(p.skyMid);
+    u.bottomColor.value.setHex(p.skyBottom);
+    u.sunColor.value.setHex(p.sunColor);
+    u.sunDir.value.set(p.sunDir[0], p.sunDir[1], p.sunDir[2]).normalize();
+  }
+  if (worldWater && worldWater.material && worldWater.material.uniforms) {
+    const wu = worldWater.material.uniforms;
+    wu.fogColor.value.setHex(p.fog);
+    wu.fogNear.value = p.fogNear * 0.72;
+    wu.fogFar.value = p.fogFar;
+  }
+  if (cloudAssets) {
+    cloudAssets.mat.color.setHex(p.cloud);
+    cloudAssets.mat.opacity = key === 'war' ? 0.74 : (key === 'golden' ? 0.68 : 0.62);
+  }
+
+  if (scene && prevTone !== p.toneMapping) {
+    scene.traverse(o => {
+      if (!o.isMesh) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) if (m) m.needsUpdate = true;
+    });
+  }
+  G.lightMode = key;
+  updateSunShadow(true);
 }
 
 let vegAssets = null;
@@ -2862,7 +3767,7 @@ function ensureVegAssets() {
 }
 
 /* 多树种实例化：树干、树冠和接地暗斑都分别合并成一次 draw call。 */
-function addTreeCluster(spots, random) {
+function addTreeCluster(spots, random, scope) {
   ensureVegAssets();
   const group = new THREE.Group();
   const buckets = { pine: [], pine2: [], broad: [], tall: [] };
@@ -2905,6 +3810,20 @@ function addTreeCluster(spots, random) {
       dummy.scale.set(crownR, crownH, crownR);
       dummy.updateMatrix();
       crowns.setMatrixAt(i, dummy.matrix);
+      const trunkMat = new THREE.Matrix4();
+      const crownMat = new THREE.Matrix4();
+      trunks.getMatrixAt(i, trunkMat);
+      crowns.getMatrixAt(i, crownMat);
+      const rec = {
+        kind: 'tree', scope: scope || 'world',
+        x: p.x, z: p.z, y0: p.h, y1: p.h + trunkH + crownH,
+        hitR: Math.max(1.5, crownR * 0.62), gridR: Math.max(2, crownR),
+        hp: 2, dead: false, score: 0,
+        trunkMesh: trunks, crownMesh: crowns, shadowMesh: null,
+        ti: i, si: all.length, trunkMat, crownMat, shadowMat: null,
+        trunkH, leafColor: st.mat.color.getHex()
+      };
+      p._treeRec = rec;
       all.push(p);
     }
     trunks.instanceMatrix.needsUpdate = true;
@@ -2925,13 +3844,32 @@ function addTreeCluster(spots, random) {
     }
     shadows.instanceMatrix.needsUpdate = true;
     group.add(shadows);
+    for (let i = 0; i < all.length; i++) {
+      const rec = all[i]._treeRec;
+      if (!rec) continue;
+      const sm = new THREE.Matrix4();
+      shadows.getMatrixAt(i, sm);
+      rec.shadowMesh = shadows;
+      rec.shadowMat = sm;
+      treeTargets.push(rec);
+      addPropTarget(rec);
+    }
   }
   return group;
 }
 
+function removeTreeTargetsByScope(scope) {
+  for (let i = treeTargets.length - 1; i >= 0; i--) {
+    const t = treeTargets[i];
+    if (t.scope !== scope) continue;
+    removePropTarget(t);
+    treeTargets.splice(i, 1);
+  }
+}
+
 function createVegetation() {
   ensureVegAssets();
-  const COUNT = 6800;
+  const COUNT = 8200;
   const rng = mulberry32((GEN.seed ^ 0x7E33) >>> 0);
   const spots = [];
   let tries = 0;
@@ -2959,7 +3897,7 @@ function createVegetation() {
     });
   }
   /* 牧野中的树丛 / 防风林，比全图均匀撒点更像真实植被群落。 */
-  for (let gi = 0, added = 0; gi < 90 && added < 70; gi++) {
+  for (let gi = 0, added = 0; gi < 132 && added < 96; gi++) {
     const gx = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const gz = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const gh = terrainHeight(gx, gz);
@@ -2971,7 +3909,7 @@ function createVegetation() {
       if (Math.hypot((gx - ct.x) / ct.rx, (gz - ct.z) / ct.rz) < 1.25) inCity = true;
     }
     if (inCity) continue;
-    const count = 9 + (rng() * 15 | 0);
+    const count = 12 + (rng() * 19 | 0);
     const gr = 70 + rng() * 125;
     for (let k = 0; k < count; k++) {
       const a = rng() * 6.2832, rr = Math.sqrt(rng()) * gr;
@@ -2994,7 +3932,7 @@ function createVegetation() {
   worldTrees.push(treeGroup);
 
   /* 灌木：颜色略提亮，密度降一点，把预算留给更有轮廓的树冠。 */
-  const BCOUNT = 7800;
+  const BCOUNT = 9200;
   const bushes = new THREE.InstancedMesh(vegAssets.bushGeo, vegAssets.bushMat, BCOUNT);
   bushes.frustumCulled = false;
   let bp = 0, bt = 0;
@@ -3026,13 +3964,13 @@ function createVegetation() {
   worldTrees.push(bushes);
 
   /* 田边树篱：缩短间距并加大重叠，让“珠子串”变成连续绿篱。 */
-  const hedge = new THREE.InstancedMesh(vegAssets.bushGeo, vegAssets.hedgeMat, 22000);
+  const hedge = new THREE.InstancedMesh(vegAssets.bushGeo, vegAssets.hedgeMat, 70000);
   hedge.frustumCulled = false;
   let hp = 0;
   for (const f of GEN.fields) {
-    if (hp >= 21960) break;
+    if (hp >= 69960) break;
     if (f.kind === 'pasture' || f.kind === 'orchard') continue;
-    for (let ei = 0; ei < f.poly.length && hp < 21960; ei++) {
+    for (let ei = 0; ei < f.poly.length && hp < 69960; ei++) {
       const a = f.poly[ei], b = f.poly[(ei + 1) % f.poly.length];
       const aw = fieldLocalToWorld(f, a[0], a[1]);
       const bw = fieldLocalToWorld(f, b[0], b[1]);
@@ -3041,7 +3979,7 @@ function createVegetation() {
       if (len < 2) continue;
       const nx = -dz / len, nz = dx / len;
       const n = Math.ceil(len / 4.4);
-      for (let q = 0; q < n && hp < 21960; q++) {
+      for (let q = 0; q < n && hp < 69960; q++) {
         if (ei === f.gateEdge && Math.abs(q / n - 0.5) < 0.12) continue;
         const t = (q + 0.5) / n;
         let px = aw[0] + dx * t, pz = aw[1] + dz * t;
@@ -3707,12 +4645,21 @@ function makeRailCar(locomotive) {
 
 function createRailStation(st) {
   const B = { pos: [], col: [], idx: [] };
+  const CANOPY = { pos: [], col: [], idx: [] };
+  const YARD = { pos: [], col: [], idx: [] };
+  const ANNEX_L = { pos: [], col: [], idx: [] };
+  const ANNEX_R = { pos: [], col: [], idx: [] };
   const y = st.h, rot = st.rot;
   const local = (lx, lz) => detLocal(st.x, st.z, rot, lx, lz);
-  const add = (lx, lz, y0, y1, sx, sz, rgb) => {
+  const addTo = (batch, lx, lz, y0, y1, sx, sz, rgb) => {
     const p = local(lx, lz);
-    addRotBox(B, p[0], p[1], y0, y1, sx, sz, rot, rgb);
+    addRotBox(batch, p[0], p[1], y0, y1, sx, sz, rot, rgb);
   };
+  const add = (lx, lz, y0, y1, sx, sz, rgb) => addTo(B, lx, lz, y0, y1, sx, sz, rgb);
+  const addCanopy = (lx, lz, y0, y1, sx, sz, rgb) => addTo(CANOPY, lx, lz, y0, y1, sx, sz, rgb);
+  const addYard = (lx, lz, y0, y1, sx, sz, rgb) => addTo(YARD, lx, lz, y0, y1, sx, sz, rgb);
+  const addAnnexL = (lx, lz, y0, y1, sx, sz, rgb) => addTo(ANNEX_L, lx, lz, y0, y1, sx, sz, rgb);
+  const addAnnexR = (lx, lz, y0, y1, sx, sz, rgb) => addTo(ANNEX_R, lx, lz, y0, y1, sx, sz, rgb);
   const glass = [0.16, 0.27, 0.33];
   const steel = [0.28, 0.33, 0.34];
   const wall = [0.73, 0.70, 0.62];
@@ -3754,45 +4701,82 @@ function createRailStation(st) {
     add(i * 2.2, 11.30, y + 0.55, y + 4.25, 1.65, 0.12, glass);
   }
   add(0, 11.35, y + 4.55, y + 4.95, 18, 3.8, roof);
-  add(0, 4.72, y + 5.30, y + 5.82, pxLen, 6.65, roof);
-  add(0, 4.72, y + 5.82, y + 6.02, pxLen * 0.95, 5.3, [0.34, 0.41, 0.43]);
-  add(0, 8.40, y + 5.22, y + 5.48, 46, 7.2, roof);
+  addCanopy(0, 4.72, y + 5.30, y + 5.82, pxLen, 6.65, roof);
+  addCanopy(0, 4.72, y + 5.82, y + 6.02, pxLen * 0.95, 5.3, [0.34, 0.41, 0.43]);
+  addCanopy(0, 8.40, y + 5.22, y + 5.48, 46, 7.2, roof);
   for (let i = -3; i <= 3; i++) {
     const lx = i * pxLen * 0.135;
-    add(lx, 5.72, y + 1.06, y + 5.30, 0.24, 0.24, steel);
-    add(lx, 5.72, y + 5.14, y + 5.32, 0.95, 0.70, [0.37, 0.42, 0.42]);
+    addCanopy(lx, 5.72, y + 1.06, y + 5.30, 0.24, 0.24, steel);
+    addCanopy(lx, 5.72, y + 5.14, y + 5.32, 0.95, 0.70, [0.37, 0.42, 0.42]);
   }
   for (const lx of [-19.0, 19.0]) {
-    add(lx, 8.30, y + 1.06, y + 5.24, 0.24, 0.24, steel);
+    addCanopy(lx, 8.30, y + 1.06, y + 5.24, 0.24, 0.24, steel);
   }
 
   /* 月台座椅、信息牌、垃圾桶与站前设施，让站场不是一块空水泥地。 */
   for (const lx of [-42, -22, 0, 22, 42]) {
-    add(lx, 4.95, y + 1.42, y + 1.60, 3.2, 0.62, wood);
-    add(lx, 5.25, y + 1.08, y + 1.75, 3.3, 0.16, steel);
-    add(lx, 4.68, y + 1.08, y + 1.40, 3.1, 0.14, steel);
+    addYard(lx, 4.95, y + 1.42, y + 1.60, 3.2, 0.62, wood);
+    addYard(lx, 5.25, y + 1.08, y + 1.75, 3.3, 0.16, steel);
+    addYard(lx, 4.68, y + 1.08, y + 1.40, 3.1, 0.14, steel);
   }
   for (const lx of [-34, 34]) {
-    add(lx, 4.82, y + 1.08, y + 3.45, 2.4, 0.20, [0.17, 0.22, 0.23]);
-    add(lx, 4.72, y + 1.20, y + 3.20, 2.05, 0.12, [0.68, 0.78, 0.78]);
+    addYard(lx, 4.82, y + 1.08, y + 3.45, 2.4, 0.20, [0.17, 0.22, 0.23]);
+    addYard(lx, 4.72, y + 1.20, y + 3.20, 2.05, 0.12, [0.68, 0.78, 0.78]);
   }
-  add(-26, 31.5, y + 0.20, y + 3.7, 12, 8.5, [0.66, 0.64, 0.56]);
-  add(-26, 31.5, y + 3.7, y + 4.0, 13.5, 9.8, roof);
-  add(-26, 27.15, y + 0.45, y + 2.8, 2.2, 0.14, steel);
-  add(24, 31.6, y + 0.20, y + 3.35, 15, 4.2, [0.22, 0.28, 0.29]);
-  add(24, 31.6, y + 3.35, y + 3.62, 17, 6.0, roof);
-  add(24, 32.7, y + 1.0, y + 2.0, 12, 0.18, glass);
+  addAnnexL(-26, 31.5, y + 0.20, y + 3.7, 12, 8.5, [0.66, 0.64, 0.56]);
+  addAnnexL(-26, 31.5, y + 3.7, y + 4.0, 13.5, 9.8, roof);
+  addAnnexL(-26, 27.15, y + 0.45, y + 2.8, 2.2, 0.14, steel);
+  addAnnexR(24, 31.6, y + 0.20, y + 3.35, 15, 4.2, [0.22, 0.28, 0.29]);
+  addAnnexR(24, 31.6, y + 3.35, y + 3.62, 17, 6.0, roof);
+  addAnnexR(24, 32.7, y + 1.0, y + 2.0, 12, 0.18, glass);
   for (const lx of [-32, 32, 0]) {
-    add(lx, 32.0, y + 0.20, y + 5.8, 0.22, 0.22, steel);
-    add(lx, 32.0, y + 5.75, y + 6.10, 0.82, 0.48, [0.86, 0.70, 0.35]);
+    addYard(lx, 32.0, y + 0.20, y + 5.8, 0.22, 0.22, steel);
+    addYard(lx, 32.0, y + 5.75, y + 6.10, 0.82, 0.48, [0.86, 0.70, 0.35]);
   }
   for (const lx of [-38, 38]) {
-    add(lx, 32.5, y + 0.18, y + 0.62, 6.0, 3.6, [0.44, 0.38, 0.29]);
-    add(lx, 32.5, y + 0.62, y + 1.15, 4.8, 2.7, [0.28, 0.43, 0.23]);
+    addYard(lx, 32.5, y + 0.18, y + 0.62, 6.0, 3.6, [0.44, 0.38, 0.29]);
+    addYard(lx, 32.5, y + 0.62, y + 1.15, 4.8, 2.7, [0.28, 0.43, 0.23]);
   }
-  const mesh = finishBatchMesh(B);
-  scene.add(mesh);
-  worldScenery.push(mesh);
+  const registerModule = (batch, lx, lz, hw, hd, y0, y1, hp, score, color, blastScale) => {
+    if (!batch.idx.length) return null;
+    const mesh = finishBatchMesh(batch);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    worldScenery.push(mesh);
+    const p = local(lx, lz);
+    const t = {
+      kind: 'station', x: p[0], z: p[1], y0, y1,
+      hw, hd, rot, box: true, gridR: Math.hypot(hw, hd),
+      hp, hpMax: hp, dead: false, score, mesh,
+      blastScale, debrisColor: color
+    };
+    stationTargets.push(t);
+    addPropTarget(t);
+    return t;
+  };
+
+  const coreTarget = registerModule(B, 0, 19, Math.max(34, st.len * 0.23), 9.5,
+    y + 0.2, y + 15.0, 24, 80, 0x9b9487, 2.25);
+  registerModule(CANOPY, 0, 5.2, pxLen * 0.52, 4.7,
+    y + 1.0, y + 6.1, 12, 30, 0x5b6d74, 1.45);
+  registerModule(YARD, 0, 20.0, Math.max(46, st.len * 0.34), 17.0,
+    y + 0.2, y + 6.2, 8, 25, 0x686b62, 1.15);
+  registerModule(ANNEX_L, -26, 31.5, 7.7, 5.6,
+    y + 0.2, y + 4.2, 8, 20, 0xa59d8b, 1.15);
+  registerModule(ANNEX_R, 24, 31.6, 9.1, 5.0,
+    y + 0.2, y + 3.8, 8, 20, 0x4f6166, 1.15);
+
+  const registerMeshTarget = (mesh, x, z, hw, hd, y0, y1, hp, score) => {
+    const t = {
+      kind: 'station', x, z, y0, y1, hw, hd, rot,
+      box: true, gridR: Math.hypot(hw, hd), hp, hpMax: hp,
+      dead: false, score, mesh, blastScale: 0.75, debrisColor: 0x8f9898
+    };
+    stationTargets.push(t);
+    addPropTarget(t);
+    return t;
+  };
 
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(22, 4.6),
@@ -3803,6 +4787,8 @@ function createRailStation(st) {
   sign.rotation.y = rot + Math.PI;
   scene.add(sign);
   worldScenery.push(sign);
+  const signTarget = registerMeshTarget(sign, sp[0], sp[1],
+    11.2, 1.2, y + 6.5, y + 11.4, 3, 8);
 
   const clockTex = getStationClockTexture();
   const clock = new THREE.Mesh(
@@ -3814,6 +4800,9 @@ function createRailStation(st) {
   clock.rotation.y = rot + Math.PI;
   scene.add(clock);
   worldScenery.push(clock);
+  const clockTarget = registerMeshTarget(clock, cp[0], cp[1],
+    2.2, 1.0, y + 10.3, y + 14.2, 3, 8);
+  if (coreTarget) coreTarget.attached = [signTarget, clockTarget];
 
   const sigP = local(st.len * 0.35, -4.2);
   const sig = new THREE.Group();
@@ -3829,6 +4818,7 @@ function createRailStation(st) {
   sig.position.set(sigP[0], y, sigP[1]);
   scene.add(sig);
   worldScenery.push(sig);
+  registerMeshTarget(sig, sigP[0], sigP[1], 0.9, 0.9, y, y + 7.0, 2, 5);
 }
 
 function railSample(train, s) {
@@ -3975,13 +4965,13 @@ function createRailways() {
   railTrains.length = 0;
   if (!GEN.railStations || !GEN.railStations.length) return;
   const TRACK = { pos: [], col: [], idx: [] };
-  const POLES = { pos: [], col: [], idx: [] };
   const SLEEPERS = [];
-  const wireSegments = [];
+  const poleSpots = [];
+  const wireLinks = [];
 
   for (const line of GEN.railways) {
     if (line.length < 2) continue;
-    const lineWire = [];
+    let lastPole = -1;
     for (let i = 0; i < line.length;) {
       if (!line[i].bridge) { i++; continue; }
       let e = i;
@@ -4011,16 +5001,18 @@ function createRailways() {
         const nx = -uz, nz = ux;
         const px = a.x + nx * 4.0, pz = a.z + nz * 4.0;
         if (roadAt(GEN, px, pz) < 0.015) {
-          addRotBox(POLES, px, pz, a.h, a.h + 7.8, 0.22, 0.22, 0, [0.29, 0.32, 0.32]);
-          addRotBox(POLES, px - nx * 2.0, pz - nz * 2.0,
-            a.h + 5.58, a.h + 5.72, 0.18, 4.2, Math.atan2(-uz, ux), [0.34, 0.37, 0.37]);
+          const pi = poleSpots.length;
+          poleSpots.push({
+            x: px, z: pz, baseY: a.h, height: 7.8, armLen: 4.2,
+            rot: Math.atan2(uz, ux) + Math.PI * 0.5,
+            wireY: a.h + 5.70
+          });
+          if (lastPole >= 0) wireLinks.push({ a: lastPole, b: pi, sag: 0.18 });
+          lastPole = pi;
+        } else {
+          lastPole = -1;
         }
-        lineWire.push({ x: a.x, y: a.h + 5.70, z: a.z });
       }
-    }
-    for (let i = 1; i < lineWire.length; i++) {
-      const a = lineWire[i - 1], b = lineWire[i];
-      wireSegments.push({ ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z });
     }
   }
 
@@ -4054,11 +5046,6 @@ function createRailways() {
     scene.add(mesh);
     worldScenery.push(mesh);
   }
-  if (POLES.idx.length) {
-    const mesh = finishBatchMesh(POLES);
-    scene.add(mesh);
-    worldScenery.push(mesh);
-  }
   if (SLEEPERS.length) {
     const geo = new THREE.BoxGeometry(2.9, 0.14, 0.36);
     const mat = new THREE.MeshLambertMaterial({ color: 0x5c4631 });
@@ -4076,20 +5063,7 @@ function createRailways() {
     scene.add(mesh);
     worldScenery.push(mesh);
   }
-  if (wireSegments.length) {
-    const wp = [];
-    for (const w of wireSegments) {
-      const mx = (w.ax + w.bx) * 0.5, mz = (w.az + w.bz) * 0.5;
-      const my = (w.ay + w.by) * 0.5 - 0.18;
-      wp.push(w.ax, w.ay, w.az, mx, my, mz, mx, my, mz, w.bx, w.by, w.bz);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
-    const wires = new THREE.LineSegments(geo,
-      new THREE.LineBasicMaterial({ color: 0x242b2c, transparent: true, opacity: 0.6 }));
-    scene.add(wires);
-    worldScenery.push(wires);
-  }
+  buildSceneryPoles(poleSpots, wireLinks, 0x242b2c);
 
   for (const st of GEN.railStations) createRailStation(st);
 
@@ -4110,27 +5084,124 @@ function createRailways() {
     }
     const train = {
       line, dist, total, s: Math.min(total * 0.22, 500), dir: 1,
-      speed: 23, wait: 0, cars, gap: 17
+      speed: 23, baseSpeed: 23, disabled: false, wait: 0, cars, gap: 17, carTargets: []
     };
+    for (let ci = 0; ci < cars.length; ci++) {
+      const t = {
+        kind: 'train', car: cars[ci], train, index: ci,
+        x: cars[ci].position.x, z: cars[ci].position.z,
+        y0: cars[ci].position.y, y1: cars[ci].position.y + 5.5,
+        hp: ci === 0 ? 12 : 8, hpMax: ci === 0 ? 12 : 8,
+        dead: false, score: ci === 0 ? 120 : 70,
+        blastScale: ci === 0 ? 2.4 : 1.9,
+        debrisColor: ci === 0 ? 0xd9d9cf : 0xcfd6d6
+      };
+      train.carTargets.push(t);
+      trainTargets.push(t);
+    }
     railTrains.push(train);
     updateRailTrainPose(train);
+  }
+}
+
+/* 电线杆/接触网支柱统一做成实例化目标：单根可被机炮或炸弹摧毁，邻近导线同步断开。 */
+function buildSceneryPoles(poleSpots, wireLinks, wireColor) {
+  if (!poleSpots.length) return;
+  const postMat = new THREE.MeshLambertMaterial({ color: 0x4d4637 });
+  const armMat = new THREE.MeshLambertMaterial({ color: 0x39382f });
+  const posts = new THREE.InstancedMesh(UNIT_BOX, postMat, poleSpots.length);
+  const armList = poleSpots.filter(p => p.armLen);
+  const arms = armList.length ? new THREE.InstancedMesh(UNIT_BOX, armMat, armList.length) : null;
+  const dummy = new THREE.Object3D();
+  let ai = 0;
+
+  for (let i = 0; i < poleSpots.length; i++) {
+    const p = poleSpots[i];
+    dummy.position.set(p.x, p.baseY + p.height * 0.5, p.z);
+    dummy.rotation.set(0, p.rot || 0, 0);
+    dummy.scale.set(0.24, p.height, 0.24);
+    dummy.updateMatrix();
+    posts.setMatrixAt(i, dummy.matrix);
+    p.kind = 'pole';
+    p.y0 = p.baseY;
+    p.y1 = p.baseY + p.height;
+    p.hitR = 1.05;
+    p.gridR = 1.4;
+    p.hp = 1;
+    p.dead = false;
+    p.postMesh = posts;
+    p.pi = i;
+    p.postMat = dummy.matrix.clone();
+    p.wires = [];
+    if (p.armLen) {
+      dummy.position.set(p.x, p.baseY + p.height - 1.05, p.z);
+      dummy.rotation.set(0, p.rot || 0, 0);
+      dummy.scale.set(p.armLen, 0.16, 0.18);
+      dummy.updateMatrix();
+      arms.setMatrixAt(ai, dummy.matrix);
+      p.armMesh = arms;
+      p.ai = ai++;
+      p.armMat = dummy.matrix.clone();
+    }
+    poleTargets.push(p);
+    addPropTarget(p);
+  }
+  posts.instanceMatrix.needsUpdate = true;
+  posts.castShadow = true;
+  scene.add(posts);
+  worldScenery.push(posts);
+  if (arms) {
+    arms.instanceMatrix.needsUpdate = true;
+    arms.castShadow = true;
+    scene.add(arms);
+    worldScenery.push(arms);
+  }
+
+  if (wireLinks.length) {
+    const wp = [];
+    const segments = [];
+    for (const link of wireLinks) {
+      const a = poleSpots[link.a], b = poleSpots[link.b];
+      if (!a || !b) continue;
+      const ay = a.wireY === undefined ? a.baseY + a.height * 0.98 : a.wireY;
+      const by = b.wireY === undefined ? b.baseY + b.height * 0.98 : b.wireY;
+      const mx = (a.x + b.x) * 0.5, mz = (a.z + b.z) * 0.5;
+      const my = (ay + by) * 0.5 - (link.sag === undefined ? 0.25 : link.sag);
+      const i0 = wp.length / 3;
+      const p0 = [a.x, ay, a.z], p1 = [mx, my, mz], p2 = [mx, my, mz], p3 = [b.x, by, b.z];
+      wp.push(...p0, ...p1, ...p2, ...p3);
+      const seg = { i0, i1: i0 + 1, i2: i0 + 2, i3: i0 + 3, p0, p1, p2, p3, hidden: false, attr: null };
+      a.wires.push(seg);
+      b.wires.push(seg);
+      segments.push(seg);
+    }
+    if (wp.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+      const attr = geo.attributes.position;
+      for (const seg of segments) seg.attr = attr;
+      const wires = new THREE.LineSegments(geo,
+        new THREE.LineBasicMaterial({ color: wireColor || 0x252b29, transparent: true, opacity: 0.58 }));
+      scene.add(wires);
+      worldScenery.push(wires);
+    }
   }
 }
 
 function createRoadsideInfrastructure() {
   ensureVegAssets();
   const rng = mulberry32((GEN.seed ^ 0x7A11) >>> 0);
-  const P = { pos: [], col: [], idx: [] };
-  const wirePos = [];
+  const poleSpots = [];
+  const wireLinks = [];
   const treeSpots = [];
   for (let ri = 0; ri < GEN.roads.length; ri++) {
     const road = GEN.roads[ri];
     if (road.length < 8 || (road[0] && road[0].cityLink)) continue;
     const side = ri % 2 === 0 ? 1 : -1;
-    const tops = [];
+    let lastPole = -1;
     for (let i = 6; i < road.length - 6; i += 6) {
       const p = road[i];
-      if (p.bridge) continue;
+      if (p.bridge) { lastPole = -1; continue; }
       const a = road[i - 1], b = road[i + 1];
       let ux = b.x - a.x, uz = b.z - a.z;
       const ul = Math.hypot(ux, uz) || 1;
@@ -4141,10 +5212,13 @@ function createRoadsideInfrastructure() {
       const gy = terrainHeight(px, pz);
       if (gy < WATER_LEVEL + 3) continue;
       const ang = Math.atan2(-uz, ux);
-      addRotBox(P, px, pz, gy, gy + 10.2, 0.24, 0.24, ang, [0.31, 0.28, 0.22]);
-      addRotBox(P, px, pz, gy + 9.05, gy + 9.22, 4.2, 0.16,
-        ang + Math.PI * 0.5, [0.34, 0.31, 0.24]);
-      tops.push([px, gy + 10.0, pz]);
+      const pi = poleSpots.length;
+      poleSpots.push({
+        x: px, z: pz, baseY: gy, height: 10.2, armLen: 4.2,
+        rot: ang + Math.PI * 0.5, wireY: gy + 10.0
+      });
+      if (lastPole >= 0) wireLinks.push({ a: lastPole, b: pi, sag: 1.25 });
+      lastPole = pi;
 
       if ((i / 6) % 4 === 1) {
         const tx = p.x + nx * 35, tz = p.z + nz * 35;
@@ -4159,26 +5233,8 @@ function createRoadsideInfrastructure() {
         }
       }
     }
-    for (let i = 0; i < tops.length - 1; i++) {
-      const a = tops[i], b = tops[i + 1];
-      const mx = (a[0] + b[0]) * 0.5, mz = (a[2] + b[2]) * 0.5;
-      const my = (a[1] + b[1]) * 0.5 - 1.25;
-      wirePos.push(a[0], a[1], a[2], mx, my, mz, mx, my, mz, b[0], b[1], b[2]);
-    }
   }
-  if (P.idx.length) {
-    const mesh = finishBatchMesh(P);
-    scene.add(mesh);
-    worldScenery.push(mesh);
-  }
-  if (wirePos.length) {
-    const wg = new THREE.BufferGeometry();
-    wg.setAttribute('position', new THREE.Float32BufferAttribute(wirePos, 3));
-    const wires = new THREE.LineSegments(wg,
-      new THREE.LineBasicMaterial({ color: 0x252b29, transparent: true, opacity: 0.52 }));
-    scene.add(wires);
-    worldScenery.push(wires);
-  }
+  buildSceneryPoles(poleSpots, wireLinks, 0x252b29);
   if (treeSpots.length) {
     const trees = addTreeCluster(treeSpots);
     scene.add(trees);
@@ -4453,6 +5509,7 @@ function villageStreetRot(v) {
 
 /* 民居 / 谷仓：登记进 buildings + 空间哈希，可被机炮与炸弹摧毁（分数 +10，不计击毁数） */
 function createVillageHouses() {
+  removeTreeTargetsByScope('village');
   if (villageTreeGroup) {
     scene.remove(villageTreeGroup);
     villageTreeGroup = null;
@@ -4567,7 +5624,7 @@ function createVillageHouses() {
       });
     }
     if (treeSpots.length) {
-      villageTreeGroup.add(addTreeCluster(treeSpots));
+      villageTreeGroup.add(addTreeCluster(treeSpots, null, 'village'));
     }
   }
   /* 细节统一在农庄建筑加入后由调用方合批。 */
@@ -4696,6 +5753,7 @@ function createVillages() {
 
 /* 农庄建筑与场院：每次开局重建；麦秸、筒仓和防风树归入独立装饰组。 */
 function createFarmsteads() {
+  removeTreeTargetsByScope('farm');
   if (farmDecorGroup) {
     scene.remove(farmDecorGroup);
     farmDecorGroup = null;
@@ -4773,7 +5831,7 @@ function createFarmsteads() {
         rot: rng() * 6.2832, style: rng() < 0.65 ? 'broad' : 'pine2'
       });
     }
-    if (winds.length) farmDecorGroup.add(addTreeCluster(winds));
+    if (winds.length) farmDecorGroup.add(addTreeCluster(winds, null, 'farm'));
   }
 }
 
@@ -4842,6 +5900,7 @@ function createFarmland() {
   const PROP = { pos: [], col: [], idx: [] };
   const haySpots = [];
   const orchardSpots = [];
+  const windbreakSpots = [];
   ensureVillageAssets();
 
   function fieldSurface(f, lx, lz, spec, crop) {
@@ -5003,6 +6062,33 @@ function createFarmland() {
         }
       }
     }
+
+    /* 部分大田沿边缘布置防风林，给连续农田增加竖向层次和乡野边界。 */
+    if (fi % 5 === 0) {
+      const ei = (fi * 3 + 1) % f.poly.length;
+      if (ei !== f.gateEdge) {
+        const a = f.poly[ei], b = f.poly[(ei + 1) % f.poly.length];
+        const aw = fieldLocalToWorld(f, a[0], a[1]);
+        const bw = fieldLocalToWorld(f, b[0], b[1]);
+        const dx = bw[0] - aw[0], dz = bw[1] - aw[1];
+        const len = Math.hypot(dx, dz);
+        if (len > 30) {
+          const nx = -dz / len, nz = dx / len;
+          const sgn = nx * (aw[0] - f.x) + nz * (aw[1] - f.z) >= 0 ? 1 : -1;
+          const n = Math.min(14, Math.max(4, Math.floor(len / 11)));
+          for (let q = 1; q < n; q++) {
+            const t = q / n;
+            const px = aw[0] + dx * t + nx * sgn * 3.6;
+            const pz = aw[1] + dz * t + nz * sgn * 3.6;
+            windbreakSpots.push({
+              x: px, z: pz, h: terrainHeight(px, pz),
+              s: 0.54 + rng() * 0.34, rot: rng() * 6.2832,
+              style: rng() < 0.62 ? 'broad' : 'pine2'
+            });
+          }
+        }
+      }
+    }
   }
 
   /* 农庄内部土路：沿田块间地籍空隙铺设，不再是“贴在一起的色块”。 */
@@ -5106,6 +6192,11 @@ function createFarmland() {
     scene.add(trees);
     worldScenery.push(trees);
   }
+  if (windbreakSpots.length) {
+    const trees = addTreeCluster(windbreakSpots);
+    scene.add(trees);
+    worldScenery.push(trees);
+  }
 
   /* 草垛：全部合成一个 InstancedMesh，省掉上百次 draw call */
   if (haySpots.length) {
@@ -5128,28 +6219,54 @@ function createFarmland() {
 function createForests() {
   if (!GEN.forests.length) return;
   ensureVegAssets();
-  const MAX = 13000;
+  const MAX = 14500;
   const spots = [];
+  const logSpots = [];
   for (const f of GEN.forests) {
-    const rng = mulberry32((((GEN.seed ^ 0x3C21) + ((f.x * 13) | 0)) >>> 0));
-    const want = Math.min(2400, Math.round((Math.PI * f.a * f.b) / 120));
-    for (let k = 0; k < want * 3 && spots.length < MAX; k++) {
-      const ang = rng() * 6.2832, rr = Math.sqrt(rng());
-      const lx = Math.cos(ang) * rr * f.a, lz = Math.sin(ang) * rr * f.b;
+    const rng = mulberry32(f.seed);
+    const want = Math.min(2500, Math.round((Math.PI * f.a * f.b) / 86));
+    for (let k = 0; k < want * 5 && spots.length < MAX; k++) {
+      const lx = (rng() * 2 - 1) * f.a * 1.15;
+      const lz = (rng() * 2 - 1) * f.b * 1.12;
       const x = f.x + lx * f.cr - lz * f.sr;
       const z = f.z + lx * f.sr + lz * f.cr;
+      const cov = forestCoverage(f, x, z);
+      if (cov < 0.085) continue;
+      const edge = smoothstep(0.07, 0.72, cov);
+      if (rng() > 0.06 + edge * 0.90) continue;
       const h = terrainHeight(x, z);
       if (h < WATER_LEVEL + 4 || h > 340) continue;
       if (roadAt(GEN, x, z) > 0.08) continue;
       if (insideVillage(x, z, 1.12) || insideFarmstead(x, z, 1.7) ||
           insideField(x, z, 1.05) || railNear(GEN, x, z, 24)) continue;
+      const moist = fbm(x * 0.0024, z * 0.0024, f.seed ^ 0x61A3, 2);
       const roll = rng();
+      let style;
+      if (h > 245) style = roll < 0.64 ? 'pine' : (roll < 0.88 ? 'pine2' : 'tall');
+      else if (moist > 0.56) style = roll < 0.46 ? 'broad' : (roll < 0.72 ? 'pine2' : 'tall');
+      else style = roll < 0.52 ? 'pine' : (roll < 0.78 ? 'pine2' : 'broad');
       spots.push({
         x, z, h,
-        s: 0.82 + rng() * 0.92,
+        s: (0.58 + rng() * 0.72) * (0.84 + edge * 0.28),
         rot: rng() * Math.PI * 2,
-        style: roll < 0.58 ? 'pine' : roll < 0.82 ? 'pine2' : 'broad'
+        style
       });
+    }
+
+    /* 倒木、断桩和岩石补足林下层次，也让林缘不像整片“树桩阵列”。 */
+    const logs = 4 + ((rng() * 7) | 0);
+    for (let k = 0; k < logs * 5 && logSpots.length < 230; k++) {
+      const lx = (rng() * 2 - 1) * f.a * 0.92;
+      const lz = (rng() * 2 - 1) * f.b * 0.86;
+      const x = f.x + lx * f.cr - lz * f.sr;
+      const z = f.z + lx * f.sr + lz * f.cr;
+      const cov = forestCoverage(f, x, z);
+      if (cov < 0.18 || cov > 0.82) continue;
+      const h = terrainHeight(x, z);
+      if (h < WATER_LEVEL + 3 || roadAt(GEN, x, z) > 0.05 ||
+          insideField(x, z, 1.0) || railNear(GEN, x, z, 20)) continue;
+      logSpots.push({ x, z, h, s: 0.65 + rng() * 0.9, rot: rng() * Math.PI * 2, tilt: (rng() - 0.5) * 0.16 });
+      break;
     }
   }
   if (!spots.length) return;
@@ -5179,6 +6296,134 @@ function createForests() {
   bushes.instanceMatrix.needsUpdate = true;
   scene.add(bushes);
   worldTrees.push(bushes);
+
+  if (logSpots.length) {
+    const logGeo = new THREE.CylinderGeometry(0.72, 0.96, 1, 7);
+    const logMat = new THREE.MeshLambertMaterial({ color: 0x4a3525 });
+    const logs = new THREE.InstancedMesh(logGeo, logMat, logSpots.length);
+    const ld = new THREE.Object3D();
+    for (let i = 0; i < logSpots.length; i++) {
+      const p = logSpots[i];
+      ld.position.set(p.x, p.h + 0.42 * p.s, p.z);
+      ld.rotation.set(p.tilt, p.rot, Math.PI * 0.5);
+      ld.scale.set(p.s * 0.7, 4.5 + p.s * 4.0, p.s * 0.7);
+      ld.updateMatrix();
+      logs.setMatrixAt(i, ld.matrix);
+    }
+    logs.instanceMatrix.needsUpdate = true;
+    logs.receiveShadow = true;
+    scene.add(logs);
+    worldTrees.push(logs);
+  }
+}
+
+function createMeadows() {
+  if (!GEN.meadows || !GEN.meadows.length) return;
+  ensureVegAssets();
+  ensureVillageAssets();
+  const treeSpots = [];
+  const bushSpots = [];
+  const haySpots = [];
+
+  const validPoint = (x, z) => {
+    const h = terrainHeight(x, z);
+    if (h < WATER_LEVEL + 2.5 || h > 340) return false;
+    if (roadAt(GEN, x, z) > 0.035 || railNear(GEN, x, z, 20)) return false;
+    if (insideField(x, z, 1.02) || insideVillage(x, z, 1.06) || insideFarmstead(x, z, 1.35)) return false;
+    for (const f of GEN.forests) if (forestCoverage(f, x, z) > 0.16) return false;
+    return true;
+  };
+
+  for (const md of GEN.meadows) {
+    const rng = mulberry32(md.seed);
+
+    /* 少量树丛 + 孤立树，形成牧场、草甸和牧草地的疏林边界。 */
+    for (let gi = 0, made = 0; gi < 28 && made < 7; gi++) {
+      const x = md.x + (rng() * 2 - 1) * md.a * 0.82;
+      const z = md.z + (rng() * 2 - 1) * md.b * 0.82;
+      if (meadowCoverage(md, x, z) < 0.18 || !validPoint(x, z)) continue;
+      const count = 3 + ((rng() * 6) | 0);
+      const rr = 10 + rng() * 28;
+      for (let k = 0; k < count; k++) {
+        const a = rng() * 6.2832, d = Math.sqrt(rng()) * rr;
+        const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+        if (!validPoint(px, pz)) continue;
+        treeSpots.push({
+          x: px, z: pz, h: terrainHeight(px, pz),
+          s: 0.50 + rng() * 0.48, rot: rng() * 6.2832,
+          style: rng() < 0.68 ? 'broad' : (rng() < 0.55 ? 'pine2' : 'pine')
+        });
+      }
+      made++;
+    }
+    for (let k = 0, made = 0; k < 42 && made < 18; k++) {
+      const x = md.x + (rng() * 2 - 1) * md.a;
+      const z = md.z + (rng() * 2 - 1) * md.b;
+      if (meadowCoverage(md, x, z) < 0.16 || !validPoint(x, z)) continue;
+      treeSpots.push({
+        x, z, h: terrainHeight(x, z),
+        s: 0.42 + rng() * 0.45, rot: rng() * 6.2832,
+        style: rng() < 0.76 ? 'broad' : 'pine2'
+      });
+      made++;
+    }
+
+    for (let k = 0, made = 0; k < 130 && made < 54; k++) {
+      const x = md.x + (rng() * 2 - 1) * md.a;
+      const z = md.z + (rng() * 2 - 1) * md.b;
+      if (meadowCoverage(md, x, z) < 0.10 || !validPoint(x, z)) continue;
+      bushSpots.push({
+        x, z, h: terrainHeight(x, z),
+        s: 0.75 + rng() * 1.45, rot: rng() * 6.2832
+      });
+      made++;
+    }
+
+    for (let k = 0, made = 0; k < 32 && made < 6; k++) {
+      const x = md.x + (rng() * 2 - 1) * md.a * 0.68;
+      const z = md.z + (rng() * 2 - 1) * md.b * 0.68;
+      if (meadowCoverage(md, x, z) < 0.24 || !validPoint(x, z)) continue;
+      haySpots.push([x, terrainHeight(x, z) + 1.3, z, 0.75 + rng() * 0.45, rng() * 3]);
+      made++;
+    }
+  }
+
+  if (treeSpots.length) {
+    const trees = addTreeCluster(treeSpots);
+    scene.add(trees);
+    worldTrees.push(trees);
+  }
+  if (bushSpots.length) {
+    const mat = new THREE.MeshLambertMaterial({ color: 0x69783b });
+    const bushes = new THREE.InstancedMesh(vegAssets.bushGeo, mat, bushSpots.length);
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < bushSpots.length; i++) {
+      const p = bushSpots[i];
+      dummy.position.set(p.x, p.h - 0.18, p.z);
+      dummy.rotation.set(0, p.rot, 0);
+      dummy.scale.set(p.s * 1.15, p.s * 0.62, p.s);
+      dummy.updateMatrix();
+      bushes.setMatrixAt(i, dummy.matrix);
+    }
+    bushes.instanceMatrix.needsUpdate = true;
+    scene.add(bushes);
+    worldTrees.push(bushes);
+  }
+  if (haySpots.length) {
+    const hays = new THREE.InstancedMesh(villageAssets.hayGeo, villageAssets.hayMat, haySpots.length);
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < haySpots.length; i++) {
+      const p = haySpots[i];
+      dummy.position.set(p[0], p[1], p[2]);
+      dummy.rotation.set(0, p[4], 0);
+      dummy.scale.setScalar(p[3]);
+      dummy.updateMatrix();
+      hays.setMatrixAt(i, dummy.matrix);
+    }
+    hays.instanceMatrix.needsUpdate = true;
+    scene.add(hays);
+    worldScenery.push(hays);
+  }
 }
 
 /* 零散巨石：一次 draw call，给山地与荒地补上实体 */
@@ -5241,6 +6486,65 @@ function queryBuildings(x, z, radius) {
     }
   }
   return _qResult;
+}
+
+/* 场景可破坏物（树木 / 电线杆 / 车站模块）使用独立空间哈希，避免子弹逐帧遍历数万实例。 */
+const PROP_HASH_CELL = 110;
+const propHash = new Map();
+let propQueryFrame = 0;
+const _propResult = [];
+
+function addPropTarget(t) {
+  const r = Math.max(1, t.gridR || t.hitR || 1);
+  const minGx = Math.floor((t.x - r) / PROP_HASH_CELL);
+  const maxGx = Math.floor((t.x + r) / PROP_HASH_CELL);
+  const minGz = Math.floor((t.z - r) / PROP_HASH_CELL);
+  const maxGz = Math.floor((t.z + r) / PROP_HASH_CELL);
+  const keys = [];
+  for (let gx = minGx; gx <= maxGx; gx++) {
+    for (let gz = minGz; gz <= maxGz; gz++) {
+      const key = gx + ',' + gz;
+      let arr = propHash.get(key);
+      if (!arr) { arr = []; propHash.set(key, arr); }
+      arr.push(t);
+      keys.push(key);
+    }
+  }
+  t._propKeys = keys;
+  t._pqf = -1;
+}
+
+function removePropTarget(t) {
+  if (!t || !t._propKeys) return;
+  for (const key of t._propKeys) {
+    const arr = propHash.get(key);
+    if (!arr) continue;
+    const i = arr.indexOf(t);
+    if (i >= 0) arr.splice(i, 1);
+  }
+  t._propKeys = null;
+}
+
+function queryPropTargets(x, z, radius) {
+  propQueryFrame++;
+  _propResult.length = 0;
+  const minGx = Math.floor((x - radius) / PROP_HASH_CELL);
+  const maxGx = Math.floor((x + radius) / PROP_HASH_CELL);
+  const minGz = Math.floor((z - radius) / PROP_HASH_CELL);
+  const maxGz = Math.floor((z + radius) / PROP_HASH_CELL);
+  for (let gx = minGx; gx <= maxGx; gx++) {
+    for (let gz = minGz; gz <= maxGz; gz++) {
+      const arr = propHash.get(gx + ',' + gz);
+      if (!arr) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const t = arr[i];
+        if (t.dead || t._pqf === propQueryFrame) continue;
+        t._pqf = propQueryFrame;
+        _propResult.push(t);
+      }
+    }
+  }
+  return _propResult;
 }
 
 /* 建筑占地是否压到公路走廊（中心 + 四向半宽） */
@@ -5507,6 +6811,7 @@ function addCityTraffic(CX, CZ, RX, RZ, xLines, zLines, rng) {
 
 function createCity() {
   detReset();
+  removeTreeTargetsByScope('city');
   if (cityDecorGroup) {
     scene.remove(cityDecorGroup);
     cityDecorGroup = null;
@@ -5745,7 +7050,7 @@ function createCity() {
       }
     }
     if (parkTrees.length) {
-      const trees = addTreeCluster(parkTrees);
+      const trees = addTreeCluster(parkTrees, null, 'city');
       cityDecorGroup.add(trees);
     }
     addCityTraffic(CX, CZ, RX, RZ, xLines, zLines, rng);
@@ -5850,6 +7155,7 @@ function clearCity() {
 }
 
 function clearWorld() {
+  clearDestructibleScenery();
   if (worldTerrain) {
     scene.remove(worldTerrain);
     worldTerrain.geometry.dispose();
@@ -5882,24 +7188,49 @@ function clearWorld() {
   clearCity();
 }
 
-function buildWorld() {
+function* buildWorldSteps() {
+  yield 'terrainMesh';
   createTerrain();
+  yield 'waterMesh';
   createWater();
+  yield 'roadMesh';
   createRoads();
+  yield 'railMesh';
   createRailways();
+  yield 'shoreMesh';
   createShoreDetails();
+  yield 'villageMesh';
   createVillages();
+  yield 'fieldMesh';
   createFarmland();
+  yield 'roadsideMesh';
   createRoadsideInfrastructure();
+  yield 'ruralMesh';
   createRuralLandmarks();
+  yield 'vegetationMesh';
   createVegetation();
+  yield 'forestMesh';
   createForests();
+  yield 'meadowMesh';
+  createMeadows();
+  yield 'rockMesh';
   createRocks();
+  yield 'cloudMesh';
   createClouds();
+  yield 'cityMesh';
   createCity();          /* createCity 会 detReset()，村庄细节必须在它之后合批 */
+  yield 'villageHomes';
   createVillageHouses();
+  yield 'farmsteadMesh';
   createFarmsteads();
+  yield 'detailBatch';
   detBuild();
+}
+
+function buildWorld() {
+  const steps = buildWorldSteps();
+  let step;
+  do { step = steps.next(); } while (!step.done);
 }
 
 function sphereHitsBuilding(px, py, pz, r, b) {
@@ -5977,6 +7308,211 @@ function spawnDebris(b) {
       (Math.random() - 0.5) * 12
     )
   });
+}
+
+function spawnSceneryDebris(pos, count, colorHex, size) {
+  for (let i = 0; i < count; i++) {
+    const s = (size || 1) * (0.28 + Math.random() * 0.72);
+    const m = new THREE.Mesh(UNIT_BOX, getDebrisMat(colorHex));
+    m.position.copy(pos);
+    m.position.x += (Math.random() - 0.5) * size * 1.8;
+    m.position.y += Math.random() * size * 2.0;
+    m.position.z += (Math.random() - 0.5) * size * 1.8;
+    m.scale.set(s, s * (0.55 + Math.random()), s);
+    scene.add(m);
+    const dir = new THREE.Vector3(
+      (Math.random() - 0.5) * 1.4,
+      0.35 + Math.random() * 1.1,
+      (Math.random() - 0.5) * 1.4
+    ).normalize();
+    effects.push({
+      type: 'debris', mesh: m, ownsGeo: false, ownsMat: false,
+      life: 0, dur: 1.15 + Math.random() * 1.25,
+      vel: dir.multiplyScalar(9 + Math.random() * 20),
+      angVel: new THREE.Vector3(
+        (Math.random() - 0.5) * 11,
+        (Math.random() - 0.5) * 11,
+        (Math.random() - 0.5) * 11
+      )
+    });
+  }
+}
+
+function hideTreeTarget(t) {
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  t.crownMesh.setMatrixAt(t.ti, zero);
+  t.crownMesh.instanceMatrix.needsUpdate = true;
+  if (t.shadowMesh) {
+    t.shadowMesh.setMatrixAt(t.si, zero);
+    t.shadowMesh.instanceMatrix.needsUpdate = true;
+  }
+  const pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scale = new THREE.Vector3();
+  t.trunkMat.decompose(pos, quat, scale);
+  scale.y *= 0.14;
+  const stump = new THREE.Matrix4().compose(pos, quat, scale);
+  t.trunkMesh.setMatrixAt(t.ti, stump);
+  t.trunkMesh.instanceMatrix.needsUpdate = true;
+}
+
+function restoreTreeTarget(t) {
+  t.dead = false;
+  t.hp = 2;
+  t.trunkMesh.setMatrixAt(t.ti, t.trunkMat);
+  t.crownMesh.setMatrixAt(t.ti, t.crownMat);
+  t.trunkMesh.instanceMatrix.needsUpdate = true;
+  t.crownMesh.instanceMatrix.needsUpdate = true;
+  if (t.shadowMesh && t.shadowMat) {
+    t.shadowMesh.setMatrixAt(t.si, t.shadowMat);
+    t.shadowMesh.instanceMatrix.needsUpdate = true;
+  }
+  addPropTarget(t);
+}
+
+function cutPoleWires(t) {
+  if (!t.wires) return;
+  let attr = null;
+  for (const seg of t.wires) {
+    if (!seg || !seg.attr || seg.hidden) continue;
+    attr = seg.attr;
+    seg.attr.setXYZ(seg.i0, 0, 0, 0);
+    seg.attr.setXYZ(seg.i1, 0, 0, 0);
+    seg.attr.setXYZ(seg.i2, 0, 0, 0);
+    seg.attr.setXYZ(seg.i3, 0, 0, 0);
+    seg.hidden = true;
+  }
+  if (attr) attr.needsUpdate = true;
+}
+
+function restorePoleWires(t) {
+  if (!t.wires) return;
+  let attr = null;
+  for (const seg of t.wires) {
+    if (!seg || !seg.attr || !seg.hidden) continue;
+    attr = seg.attr;
+    seg.attr.setXYZ(seg.i0, seg.p0[0], seg.p0[1], seg.p0[2]);
+    seg.attr.setXYZ(seg.i1, seg.p1[0], seg.p1[1], seg.p1[2]);
+    seg.attr.setXYZ(seg.i2, seg.p2[0], seg.p2[1], seg.p2[2]);
+    seg.attr.setXYZ(seg.i3, seg.p3[0], seg.p3[1], seg.p3[2]);
+    seg.hidden = false;
+  }
+  if (attr) attr.needsUpdate = true;
+}
+
+function destroySceneryTarget(t, hitPos) {
+  if (t.dead) return;
+  t.dead = true;
+  removePropTarget(t);
+
+  if (t.kind === 'tree') {
+    hideTreeTarget(t);
+    const pos = hitPos || new THREE.Vector3(t.x, t.y0 + 3, t.z);
+    spawnSceneryDebris(pos, 4, t.leafColor || 0x315c3b, Math.max(0.7, t.hitR * 0.55));
+    spawnSmoke(pos.clone().setY(t.y0 + Math.max(1.5, t.y1 * 0.12)), 0.42, false);
+    return;
+  }
+
+  if (t.kind === 'pole') {
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    t.postMesh.setMatrixAt(t.pi, zero);
+    t.postMesh.instanceMatrix.needsUpdate = true;
+    if (t.armMesh) {
+      t.armMesh.setMatrixAt(t.ai, zero);
+      t.armMesh.instanceMatrix.needsUpdate = true;
+    }
+    cutPoleWires(t);
+    spawnSceneryDebris(hitPos || new THREE.Vector3(t.x, t.y0 + 3, t.z), 3, 0x4d4637, 0.55);
+    spawnHitSpark(hitPos || new THREE.Vector3(t.x, t.y0 + 3, t.z));
+    return;
+  }
+
+  let center;
+  if (t.car) {
+    center = new THREE.Vector3();
+    t.car.getWorldPosition(center);
+    center.y += 2.0;
+  } else {
+    center = new THREE.Vector3(t.x, (t.y0 + t.y1) * 0.5, t.z);
+  }
+  if (t.mesh) t.mesh.visible = false;
+  if (t.car) t.car.visible = false;
+  if (t.attached) {
+    for (const a of t.attached) {
+      if (!a || a.dead) continue;
+      a.dead = true;
+      removePropTarget(a);
+      if (a.mesh) a.mesh.visible = false;
+    }
+  }
+  const scale = t.blastScale || 1.4;
+  spawnExplosion(center, scale);
+  spawnSceneryDebris(center, t.kind === 'train' ? 9 : 7, t.debrisColor || 0x6f7775,
+    t.kind === 'train' ? 1.5 : 1.1);
+  Sound.boom(Math.min(1.7, 0.82 + scale * 0.22));
+  G.shake = Math.min(2.3, G.shake + 0.35 + scale * 0.18);
+  if (t.score) G.score += t.score;
+
+  if (t.kind === 'train' && t.train) {
+    if (t.index === 0) {
+      t.train.disabled = true;
+      t.train.speed = 0;
+    }
+  }
+}
+
+function hitSceneryTarget(t, hitPos) {
+  if (!t || t.dead) return;
+  t.hp--;
+  if (t.hp > 0) {
+    spawnHitSpark(hitPos);
+    return;
+  }
+  destroySceneryTarget(t, hitPos);
+}
+
+function resetDestructibleScenery() {
+  for (const t of treeTargets) {
+    if (t.dead) restoreTreeTarget(t);
+  }
+  for (const t of poleTargets) {
+    if (!t.dead) continue;
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    t.postMesh.setMatrixAt(t.pi, t.postMat);
+    t.postMesh.instanceMatrix.needsUpdate = true;
+    if (t.armMesh && t.armMat) {
+      t.armMesh.setMatrixAt(t.ai, t.armMat);
+      t.armMesh.instanceMatrix.needsUpdate = true;
+    }
+    restorePoleWires(t);
+    t.dead = false;
+    t.hp = 1;
+    addPropTarget(t);
+  }
+  for (const t of stationTargets) {
+    if (!t.dead) continue;
+    t.dead = false;
+    t.hp = t.hpMax;
+    if (t.mesh) t.mesh.visible = true;
+    addPropTarget(t);
+  }
+  for (const t of trainTargets) {
+    if (t.dead) {
+      t.dead = false;
+      t.hp = t.hpMax;
+      if (t.car) t.car.visible = true;
+    }
+    if (t.train) {
+      t.train.disabled = false;
+      t.train.speed = t.train.baseSpeed || 23;
+    }
+  }
+}
+
+function clearDestructibleScenery() {
+  treeTargets.length = 0;
+  poleTargets.length = 0;
+  stationTargets.length = 0;
+  trainTargets.length = 0;
+  propHash.clear();
 }
 
 /* =========================================================
@@ -6115,6 +7651,41 @@ function dropBomb(forward) {
   bombs.push({ mesh: m, vel: vel, age: 0, trail: 0 });
 }
 
+function propPointHit(t, p) {
+  if (!t || t.dead || p.y < t.y0 || p.y > t.y1) return false;
+  if (t.box) {
+    const dx = p.x - t.x, dz = p.z - t.z;
+    const c = Math.cos(t.rot), s = Math.sin(t.rot);
+    const lx = c * dx + s * dz, lz = -s * dx + c * dz;
+    return Math.abs(lx) <= t.hw && Math.abs(lz) <= t.hd;
+  }
+  const dx = p.x - t.x, dz = p.z - t.z;
+  return dx * dx + dz * dz <= (t.hitR || 1) * (t.hitR || 1);
+}
+
+function propBlastHit(t, pos, R) {
+  if (!t || t.dead) return false;
+  if (t.box) {
+    const dx = pos.x - t.x, dz = pos.z - t.z;
+    const c = Math.cos(t.rot), s = Math.sin(t.rot);
+    const lx = c * dx + s * dz, lz = -s * dx + c * dz;
+    const qx = Math.max(-t.hw, Math.min(t.hw, lx));
+    const qz = Math.max(-t.hd, Math.min(t.hd, lz));
+    const ddx = lx - qx, ddz = lz - qz;
+    const dy = Math.max(0, Math.max(t.y0 - pos.y, pos.y - t.y1));
+    return ddx * ddx + ddz * ddz + dy * dy <= R * R;
+  }
+  const dx = t.x - pos.x, dz = t.z - pos.z;
+  if (dx * dx + dz * dz > (R + (t.hitR || 1) * 0.55) ** 2) return false;
+  return pos.y > t.y0 - R && pos.y < t.y1 + R;
+}
+
+function trainCarPointHit(t, p) {
+  if (!t || t.dead || !t.car) return false;
+  const q = t.car.worldToLocal(p.clone());
+  return Math.abs(q.x) < 2.5 && q.y > -0.8 && q.y < 5.5 && Math.abs(q.z) < 8.5;
+}
+
 function onBombImpact(pos) {
   spawnExplosion(pos, 3.6);
   Sound.boom(1.6);
@@ -6144,6 +7715,19 @@ function onBombImpact(pos) {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     if (!e.dead && e.mesh.position.distanceTo(pos) < R) destroyEnemy(e, true);
+  }
+
+  /* 场景设施与植被：按爆炸半径逐目标判定，不做整片森林连坐。 */
+  const props = queryPropTargets(pos.x, pos.z, R + 60);
+  for (let i = 0; i < props.length; i++) {
+    const t = props[i];
+    if (propBlastHit(t, pos, R)) destroySceneryTarget(t, pos);
+  }
+  for (const t of trainTargets) {
+    if (!t.dead && t.car && t.car.position.distanceTo(pos) < R + 8.5) {
+      t.hp = 0;
+      destroySceneryTarget(t, pos);
+    }
   }
 }
 
@@ -6220,6 +7804,33 @@ function updateBullets(dt) {
             p.z > b.z - b.hd && p.z < b.z + b.hd &&
             p.y > b.y0 && p.y < b.y1) {
           hitByBullet(b, p.clone());
+          scene.remove(bu.mesh);
+          bullets.splice(i, 1);
+          removed = true;
+          break;
+        }
+      }
+
+      /* 树木 / 电线杆 / 车站模块 */
+      if (!removed) {
+        const props = queryPropTargets(p.x, p.z, 58);
+        for (let j = 0; j < props.length; j++) {
+          const t = props[j];
+          if (!propPointHit(t, p)) continue;
+          hitSceneryTarget(t, p.clone());
+          scene.remove(bu.mesh);
+          bullets.splice(i, 1);
+          removed = true;
+          break;
+        }
+      }
+
+      /* 列车车厢 */
+      if (!removed) {
+        for (let j = 0; j < trainTargets.length; j++) {
+          const t = trainTargets[j];
+          if (!trainCarPointHit(t, p)) continue;
+          hitSceneryTarget(t, p.clone());
           scene.remove(bu.mesh);
           bullets.splice(i, 1);
           removed = true;
@@ -6674,14 +8285,14 @@ function createDefenses() {
 
 /* ---- 敌机生成：从地图边缘进入 ---- */
 function spawnEnemy() {
-  const ang = Math.random() * Math.PI * 2;
-  const R = Math.min(CFG.mapHalf + 90, WORLD_HALF - 80);   // 从软边界外进入，但不生成到地形外
+  const R = WORLD_HALF - 45;
   const m = createEnemyPlane();
-  m.position.set(
-    Math.cos(ang) * R,
-    Math.min(880, Math.max(320, plane.position.y + (Math.random() - 0.5) * 320)),
-    Math.sin(ang) * R
-  );
+  const side = (Math.random() * 4) | 0;
+  const along = (Math.random() * 2 - 1) * (R - 80);
+  const ex = side === 0 ? -R : side === 1 ? R : along;
+  const ez = side === 2 ? -R : side === 3 ? R : along;
+  m.position.set(ex,
+    Math.min(880, Math.max(320, plane.position.y + (Math.random() - 0.5) * 320)), ez);
   scene.add(m);
 
   const fwd = new THREE.Vector3().subVectors(plane.position, m.position).normalize();
@@ -8084,7 +9695,7 @@ function updateHUD() {
   const hpPct = Math.max(0, G.hp / G.hpMax);
   if (hpPct !== lastHp) {
     hpFill.style.width = (hpPct * 100).toFixed(1) + '%';
-    hpFill.style.background = hpPct > 0.6 ? '#5ee06a' : (hpPct > 0.3 ? '#ffd24d' : '#ff5a45');
+    hpFill.style.background = hpPct > 0.6 ? '#ff686e' : (hpPct > 0.3 ? '#d94249' : '#941d27');
     lastHp = hpPct;
   }
   dmgFlash.style.opacity = G.hitFlash;
@@ -8134,6 +9745,7 @@ function resetPlane() {
 function startGame() {
   overlay.classList.add('hide');
   setCursorHidden(true);
+  applyLightingPreset(selectedLightMode);
 
   clearCity();
 
@@ -8149,6 +9761,7 @@ function startGame() {
     if (e.ownsGeo && e.mesh.geometry) e.mesh.geometry.dispose();
   }
   effects.length = 0;
+  resetDestructibleScenery();
 
   createCity();
   createVillageHouses();
@@ -8207,15 +9820,17 @@ function showGameOver() {
   if (gunReticle) gunReticle.visible = false;
   const panel = document.getElementById('panel');
   panel.innerHTML =
-    '<h1>坠机了</h1>' +
-    '<div class="sub">AIRCRAFT DESTROYED</div>' +
-    '<div class="bigscore">' + G.score + '</div>' +
-    '<p>击毁敌方单位 ' + G.destroyed + ' 个<br>保持高度，注意地面火力。</p>' +
-    '<button id="startBtn">再来一次</button>' +
-    '<button class="ghost" id="mapBtn">换张地图</button>';
+    '<div class="result-view"><div class="result-card">' +
+      '<div class="result-kicker">AIRCRAFT DESTROYED</div>' +
+      '<h1>任务终止</h1>' +
+      '<div class="bigscore">' + G.score + '</div>' +
+      '<p>击毁敌方单位 ' + G.destroyed + ' 个<br>保持高度，注意地面火力。</p>' +
+      '<button class="btn btn-primary" id="startBtn">再次出击</button>' +
+      '<button class="btn btn-secondary" id="mapBtn">选择新地图</button>' +
+    '</div></div>';
   overlay.classList.remove('hide');
   document.getElementById('startBtn').addEventListener('click', onStartClick);
-  document.getElementById('mapBtn').addEventListener('click', buildStartPanel);
+  document.getElementById('mapBtn').addEventListener('click', () => showSeedScreen());
 }
 
 function onStartClick() {
@@ -8228,43 +9843,249 @@ function onStartClick() {
    开局地图生成 UI（种子 → 2D 预览 → 地面单位布点）
 ========================================================= */
 let PLAN = { aaa: [], sam: [] };
+let selectedLightMode = 'golden';
 let currentSeed = '';
 let previewBase = null;
 let dragState = null;
 let mapCanvasEl = null;
+let genUI = null;
+let isGenerating = false;
+let generationToken = 0;
 const PREV_N = 360;
-const HINT_DEFAULT = '拖动标记摆放单位 · 点击标记删除 · 绿点=防空车 红点=导弹阵地 三角=出生点';
+const HINT_DEFAULT = '';
+
+const WORLD_STAGE_SPECS = [
+  { key:'mountains', label:'塑造地形' },
+  { key:'cities', label:'规划城市' },
+  { key:'rivers', label:'生成河流' },
+  { key:'lakes', label:'生成湖泊' },
+  { key:'villages', label:'规划村庄' },
+  { key:'roads', label:'生成道路' },
+  { key:'cityRoads', label:'连接城市' },
+  { key:'roadField', label:'压实路基' },
+  { key:'roadBridges', label:'架设公路桥' },
+  { key:'roadFieldFix', label:'修正道路' },
+  { key:'railways', label:'铺设铁路' },
+  { key:'railField', label:'整平铁路' },
+  { key:'fields', label:'生成农田' },
+  { key:'forests', label:'规划森林' },
+  { key:'meadows', label:'铺展草甸' },
+  { key:'rocks', label:'散布岩石' },
+  { key:'terrainSmooth', label:'平滑地形边缘' },
+  { key:'audit', label:'检查地形' },
+  { key:'terrainMesh', label:'构建地形模型' },
+  { key:'waterMesh', label:'生成水面' },
+  { key:'roadMesh', label:'生成道路模型' },
+  { key:'railMesh', label:'生成铁路模型' },
+  { key:'shoreMesh', label:'添加河岸' },
+  { key:'villageMesh', label:'搭建村庄' },
+  { key:'fieldMesh', label:'生成农田模型' },
+  { key:'roadsideMesh', label:'布置路边设施' },
+  { key:'ruralMesh', label:'添加乡村地标' },
+  { key:'vegetationMesh', label:'生成植被' },
+  { key:'forestMesh', label:'生成森林模型' },
+  { key:'meadowMesh', label:'布置草甸牧场' },
+  { key:'rockMesh', label:'添加岩石模型' },
+  { key:'cloudMesh', label:'生成云层' },
+  { key:'cityMesh', label:'建造城市' },
+  { key:'villageHomes', label:'建造村庄' },
+  { key:'farmsteadMesh', label:'建造农庄' },
+  { key:'detailBatch', label:'整理场景' },
+  { key:'previewBase', label:'绘制地图' },
+  { key:'previewLayers', label:'标注地图' },
+  { key:'deploy', label:'布置防线' },
+  { key:'ready', label:'准备起飞' }
+];
+const WORLD_STAGE_MAP = Object.create(null);
+WORLD_STAGE_SPECS.forEach((step, index) => {
+  step.index = index;
+  WORLD_STAGE_MAP[step.key] = step;
+});
 
 function randomSeedStr() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
-function applySeedDeferred(seedStr) {
-  const btn = document.getElementById('startBtn');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '正在生成地图…';
-  }
-  const run = () => {
-    try {
-      applySeed(seedStr);
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = '开始任务';
-      }
+function normalizeSeed(seedStr) {
+  const s = String(seedStr || '').trim().replace(/\s+/g, ' ');
+  return (s || 'OPENJET').slice(0, 40);
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[ch]);
+}
+
+function yieldToPaint() {
+  return new Promise(resolve => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    } else {
+      setTimeout(resolve, 0);
     }
+  });
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function setGenerationStage(key, fraction) {
+  if (!genUI) return;
+  const step = WORLD_STAGE_MAP[key];
+  if (!step) return;
+  const sub = Math.max(0, Math.min(0.999, Number(fraction) || 0));
+  const pct = Math.min(99.4, ((step.index + sub) / WORLD_STAGE_SPECS.length) * 100);
+  genUI.stage.textContent = step.label;
+  genUI.bar.style.width = pct.toFixed(2) + '%';
+  genUI.bar.parentNode.setAttribute('aria-valuenow', Math.round(pct));
+  genUI.percent.textContent = Math.round(pct) + '%';
+  genUI.step.textContent = String(step.index + 1).padStart(2, '0') + ' / ' +
+                           String(WORLD_STAGE_SPECS.length).padStart(2, '0');
+}
+
+function completeGenerationUI() {
+  if (!genUI) return;
+  genUI.stage.textContent = '世界生成完成';
+  genUI.bar.style.width = '100%';
+  genUI.bar.parentNode.setAttribute('aria-valuenow', '100');
+  genUI.percent.textContent = '100%';
+  genUI.step.textContent = WORLD_STAGE_SPECS.length + ' / ' + WORLD_STAGE_SPECS.length;
+}
+
+function showLoadingScreen() {
+  const panel = document.getElementById('panel');
+  panel.innerHTML =
+    '<div class="start-shell loading-view">' +
+      '<main class="loading-stage">' +
+        '<section class="loading-copy">' +
+          '<h1>正在生成世界</h1>' +
+          '<div class="loading-stage-label" id="genStage">塑造地形</div>' +
+          '<div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
+            '<div class="progress-fill" id="genBar"></div>' +
+          '</div>' +
+          '<div class="progress-meta"><span id="genPercent">0%</span><span id="genStep">00 / ' +
+            String(WORLD_STAGE_SPECS.length).padStart(2, '0') + '</span></div>' +
+        '</section>' +
+      '</main>' +
+    '</div>';
+  genUI = {
+    stage: document.getElementById('genStage'),
+    bar: document.getElementById('genBar'),
+    percent: document.getElementById('genPercent'),
+    step: document.getElementById('genStep')
   };
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => requestAnimationFrame(run));
-  } else {
-    setTimeout(run, 30);
+}
+
+function showSeedScreen(message) {
+  generationToken++;
+  isGenerating = false;
+  G.started = false;
+  G.over = false;
+  G.crashing = false;
+  if (plane) plane.visible = false;
+  setCursorHidden(false);
+  overlay.classList.remove('hide');
+  if (!currentSeed) currentSeed = randomSeedStr();
+  const panel = document.getElementById('panel');
+  panel.innerHTML =
+    '<div class="start-shell seed-view">' +
+      '<main class="seed-stage">' +
+        '<section class="seed-console">' +
+          '<label class="console-label" for="seedInput">世界种子</label>' +
+          '<div class="seed-input-wrap">' +
+            '<input id="seedInput" maxlength="40" spellcheck="false" autocomplete="off">' +
+            '<button class="btn-mini" id="seedRoll" type="button">随机</button>' +
+          '</div>' +
+          '<button class="btn btn-primary" id="seedCreate" type="button">生成世界</button>' +
+          (message ? '<div class="console-note" style="color:#ffbdaf">' + escapeHtml(message) + '</div>' : '') +
+        '</section>' +
+      '</main>' +
+    '</div>';
+  const input = document.getElementById('seedInput');
+  input.value = currentSeed;
+  document.getElementById('seedRoll').addEventListener('click', () => {
+    currentSeed = randomSeedStr();
+    input.value = currentSeed;
+    input.focus();
+  });
+  document.getElementById('seedCreate').addEventListener('click', () => startGeneration(input.value));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') startGeneration(input.value);
+  });
+  setTimeout(() => input.focus(), 40);
+}
+
+async function runStepsAsync(iterator, report) {
+  let step = iterator.next();
+  while (!step.done) {
+    report(step.value);
+    await yieldToPaint();
+    step = iterator.next();
   }
+  return step.value;
+}
+
+async function startGeneration(seedStr) {
+  if (isGenerating) return;
+  isGenerating = true;
+  const token = ++generationToken;
+  const s = normalizeSeed(seedStr);
+  currentSeed = s;
+  G.started = false;
+  G.over = false;
+  G.crashing = false;
+  if (plane) plane.visible = false;
+  setCursorHidden(false);
+  overlay.classList.remove('hide');
+  showLoadingScreen();
+  try {
+    await yieldToPaint();
+    GEN = await runStepsAsync(genWorldSteps(hashStr(s)), key => {
+      if (token === generationToken) setGenerationStage(key);
+    });
+    if (token !== generationToken) return;
+    clearWorld();
+    await runStepsAsync(buildWorldSteps(), key => {
+      if (token === generationToken) setGenerationStage(key);
+    });
+    if (token !== generationToken) return;
+    await renderPreviewBaseAsync(fraction => {
+      if (token === generationToken) setGenerationStage('previewBase', fraction);
+    });
+    setGenerationStage('previewLayers');
+    await yieldToPaint();
+    PLAN = autoPlaceUnits(5, 3);
+    setGenerationStage('deploy');
+    await yieldToPaint();
+    setGenerationStage('ready');
+    await yieldToPaint();
+    completeGenerationUI();
+    await wait(260);
+    if (token !== generationToken) return;
+    showSetupScreen();
+    resetPlane();
+    plane.visible = false;
+    updateCamera(1);
+    updateHUD();
+  } catch (err) {
+    console.error('世界生成失败', err);
+    if (token === generationToken) {
+      showSeedScreen('生成失败：' + (err && err.message ? err.message : '未知错误'));
+    }
+  } finally {
+    if (token === generationToken) isGenerating = false;
+  }
+}
+
+function applySeedDeferred(seedStr) {
+  return startGeneration(seedStr);
 }
 
 /* ---- 应用种子：重生成世界 + 布点重置 ---- */
 function applySeed(seedStr) {
-  const s = ((seedStr || '').trim()) || 'OPENJET';
+  const s = normalizeSeed(seedStr);
   currentSeed = s;
   GEN = genWorld(hashStr(s));
   PLAN = autoPlaceUnits(5, 3);
@@ -8278,13 +10099,17 @@ function applySeed(seedStr) {
 }
 
 /* ---- 2D 预览：地形高度着色（含水面色） ---- */
-function renderPreviewBase() {
+function createPreviewSurface() {
   const off = document.createElement('canvas');
   off.width = off.height = PREV_N;
   const ctx = off.getContext('2d');
   const img = ctx.createImageData(PREV_N, PREV_N);
-  const tmp = [0, 0, 0];
-  for (let iz = 0; iz < PREV_N; iz++) {
+  return { off, ctx, img, tmp: [0, 0, 0] };
+}
+
+function paintPreviewRows(surface, iz0, iz1) {
+  const { ctx, img, tmp } = surface;
+  for (let iz = iz0; iz < iz1; iz++) {
     const z = (iz / (PREV_N - 1) - 0.5) * WORLD_HALF * 2;
     for (let ix = 0; ix < PREV_N; ix++) {
       const x = (ix / (PREV_N - 1) - 0.5) * WORLD_HALF * 2;
@@ -8301,8 +10126,26 @@ function renderPreviewBase() {
       img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
     }
   }
-  ctx.putImageData(img, 0, 0);
-  previewBase = off;
+  if (iz1 === PREV_N) {
+    ctx.putImageData(img, 0, 0);
+  }
+}
+
+function renderPreviewBase() {
+  const surface = createPreviewSurface();
+  paintPreviewRows(surface, 0, PREV_N);
+  previewBase = surface.off;
+}
+
+async function renderPreviewBaseAsync(report) {
+  const surface = createPreviewSurface();
+  const chunk = 36;
+  for (let iz = 0; iz < PREV_N; iz += chunk) {
+    paintPreviewRows(surface, iz, Math.min(PREV_N, iz + chunk));
+    report(Math.min(1, (iz + chunk) / PREV_N));
+    await yieldToPaint();
+  }
+  previewBase = surface.off;
 }
 
 const mapToWorld = (px, py) => ({
@@ -8322,13 +10165,30 @@ function drawPreview() {
 
   const s = PREV_N / (WORLD_HALF * 2);          /* 世界米 → 预览像素 */
 
+  /* 草甸 / 牧场 */
+  ctx.fillStyle = 'rgba(164,166,92,.28)';
+  for (const md of (GEN.meadows || [])) {
+    for (const l of md.lobes) {
+      const m = worldToMap(l.x, l.z);
+      ctx.beginPath();
+      ctx.ellipse(m.x, m.y, Math.max(1.1, l.rx * s), Math.max(1.0, l.rz * s),
+        l.rot, 0, 6.2832);
+      ctx.fill();
+    }
+  }
+
   /* 树林 */
-  ctx.fillStyle = 'rgba(24,54,28,.52)';
+  ctx.fillStyle = 'rgba(24,54,28,.30)';
   for (const f of GEN.forests) {
-    const m = worldToMap(f.x, f.z);
-    ctx.beginPath();
-    ctx.ellipse(m.x, m.y, Math.max(1.5, f.a * s), Math.max(1.2, f.b * s), f.rot, 0, 6.2832);
-    ctx.fill();
+    for (const l of f.lobes) {
+      const wx = f.x + l.x * f.cr - l.z * f.sr;
+      const wz = f.z + l.x * f.sr + l.z * f.cr;
+      const m = worldToMap(wx, wz);
+      ctx.beginPath();
+      ctx.ellipse(m.x, m.y, Math.max(1.2, l.rx * s), Math.max(1.0, l.rz * s),
+        f.rot + l.rot, 0, 6.2832);
+      ctx.fill();
+    }
   }
 
   /* 农田 */
@@ -8515,14 +10375,56 @@ function changeCount(kind, d) {
   drawPreview();
 }
 
+function showSetupScreen() {
+  if (!GEN || !previewBase) {
+    showSeedScreen('世界尚未准备完成，请先生成地图。');
+    return;
+  }
+  overlay.classList.remove('hide');
+  setCursorHidden(false);
+  if (plane) plane.visible = false;
+  const panel = document.getElementById('panel');
+  panel.innerHTML =
+    '<div class="start-shell setup-view">' +
+      '<main class="setup-stage">' +
+        '<section class="map-column">' +
+          '<div class="column-heading"><h2>战术地图</h2></div>' +
+          '<div class="map-frame"><canvas id="mapCanvas" width="360" height="360"></canvas></div>' +
+          '<div class="mapHint" id="mapHint"></div>' +
+        '</section>' +
+        '<aside class="setup-column">' +
+          '<div class="setup-simple">' +
+            '<div class="setup-card">' +
+            '<div class="count-card"><div class="count-copy"><strong>防空车</strong></div>' +
+              '<div class="stepper"><button id="aaaMinus" type="button">−</button>' +
+                '<span class="ucount" id="aaaCount">0</span>' +
+                '<button id="aaaPlus" type="button">＋</button></div></div>' +
+            '<div class="count-card"><div class="count-copy"><strong>导弹阵地</strong></div>' +
+              '<div class="stepper"><button id="samMinus" type="button">−</button>' +
+                '<span class="ucount" id="samCount">0</span>' +
+                '<button id="samPlus" type="button">＋</button></div></div>' +
+            '<div class="deploy-actions"><button class="btn btn-secondary" id="reRoll" type="button">重新布防</button>' +
+              '<button class="btn btn-secondary" id="newMapBtn" type="button">换张地图</button></div>' +
+            '<div class="lighting-block">' +
+              '<div class="setup-card-head"><h3>战场光影</h3><span>开始任务时生效</span></div>' +
+              '<div class="lighting-grid" id="lightingPicker">' +
+                '<button class="lighting-option" data-light="none" type="button">无光影</button>' +
+                '<button class="lighting-option" data-light="golden" type="button">黄金斜阳</button>' +
+                '<button class="lighting-option" data-light="war" type="button">低饱和阴天</button>' +
+              '</div>' +
+            '</div>' +
+            '</div>' +
+            '<button class="btn btn-primary" id="startBtn" type="button">开始任务</button>' +
+          '</div>' +
+        '</aside>' +
+      '</main>' +
+    '</div>';
+  bindStartPanel();
+}
+
 function bindStartPanel() {
   const $ = id => document.getElementById(id);
   $('startBtn').addEventListener('click', onStartClick);
-  $('seedRoll').addEventListener('click', () => applySeedDeferred(randomSeedStr()));
-  $('seedGen').addEventListener('click', () => applySeedDeferred($('seedInput').value));
-  $('seedInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') applySeedDeferred($('seedInput').value);
-  });
   $('aaaPlus').addEventListener('click', () => changeCount('aaa', 1));
   $('aaaMinus').addEventListener('click', () => changeCount('aaa', -1));
   $('samPlus').addEventListener('click', () => changeCount('sam', 1));
@@ -8532,7 +10434,23 @@ function bindStartPanel() {
     syncCountLabels();
     drawPreview();
   });
-  $('seedInput').value = currentSeed;
+  $('newMapBtn').addEventListener('click', () => showSeedScreen());
+  const lightingButtons = document.querySelectorAll ?
+    Array.from(document.querySelectorAll('.lighting-option')) : [];
+  const syncLightingOptions = () => {
+    lightingButtons.forEach(btn => {
+      const on = btn.dataset.light === selectedLightMode;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  };
+  lightingButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedLightMode = btn.dataset.light;
+      syncLightingOptions();
+    });
+  });
+  syncLightingOptions();
 
   mapCanvasEl = $('mapCanvas');
   mapCanvasEl.addEventListener('pointerdown', e => {
@@ -8579,31 +10497,8 @@ function bindStartPanel() {
 }
 
 function buildStartPanel() {
-  const panel = document.getElementById('panel');
-  panel.innerHTML =
-    '<h1>Open JET</h1>' +
-    '<div class="sub">AIR STRIKE</div>' +
-    '<div class="mapui">' +
-      '<div class="mrow"><input id="seedInput" spellcheck="false" placeholder="地图种子（任意文字）">' +
-      '<button class="mini" id="seedRoll">随机</button><button class="mini" id="seedGen">生成</button></div>' +
-      '<canvas id="mapCanvas" width="360" height="360"></canvas>' +
-      '<div class="mapHint" id="mapHint">' + HINT_DEFAULT + '</div>' +
-      '<div class="mrow"><span class="ulabel">防空车</span><button class="mini" id="aaaMinus">−</button>' +
-      '<span class="ucount" id="aaaCount">0</span><button class="mini" id="aaaPlus">＋</button>' +
-      '<span class="ulabel">导弹阵地</span><button class="mini" id="samMinus">−</button>' +
-      '<span class="ucount" id="samCount">0</span><button class="mini" id="samPlus">＋</button>' +
-      '<button class="mini" id="reRoll" style="margin-left:auto">重排</button></div>' +
-    '</div>' +
-    '<details class="keysWrap"><summary>操作说明</summary><div class="keys">' +
-      '<div>W / S 俯仰升降</div><div>A / D 横滚转向</div>' +
-      '<div>鼠标左键 按住扫射</div><div>右键 按住瞄准 · 松开投弹</div>' +
-      '<div>滑动鼠标 拖动视角</div><div>Alt 视角回正 · 左Shift 加力</div>' +
-      '<div style="grid-column:1/-1">Tab 显示 / 隐藏鼠标（进入任务自动隐藏）</div>' +
-      '<div style="grid-column:1/-1">R 锁定屏幕中心最近的单位（每帧居中跟随，再按 R 解除）</div>' +
-      '<div style="grid-column:1/-1">长按 Space 关闭发动机（减速、下坠）· 松开恢复</div>' +
-    '</div></details>' +
-    '<button id="startBtn">开始任务</button>';
-  bindStartPanel();
+  if (GEN && previewBase) showSetupScreen();
+  else showSeedScreen();
 }
 
 /* =========================================================
@@ -8659,23 +10554,25 @@ function update(dt) {
     plane.rotateX(-1.8 * dt);
   }
 
-  /* 地图边界：提前提示并柔和转向；越界只夹位置，不再用连续缩坐标制造“卡死”。 */
-  const hd = Math.hypot(plane.position.x, plane.position.z);
+  /* 方形软边界：与 8800×8800 地形同形，斜向飞行不再被内切圆提前挡住。 */
+  const edgeDist = Math.max(Math.abs(plane.position.x), Math.abs(plane.position.z));
   const warnStart = CFG.mapHalf - 620;
-  const atEdge = hd > warnStart;
+  const atEdge = edgeDist > warnStart;
   if (edgeWarnEl) edgeWarnEl.classList.toggle('show', atEdge);
-  if (atEdge && hd > 1) {
-    const nx = plane.position.x / hd, nz = plane.position.z / hd;
-    const cx = -nx, cz = -nz;
+  if (atEdge && edgeDist > 1) {
+    const cd = Math.hypot(plane.position.x, plane.position.z) || 1;
+    const cx = -plane.position.x / cd, cz = -plane.position.z / cd;
     const fwdH = new THREE.Vector3(forward.x, 0, forward.z).normalize();
     const dot = fwdH.x * cx + fwdH.z * cz;
     const crossY = fwdH.z * cx - fwdH.x * cz;
     const turn = Math.atan2(crossY, dot);
-    const urgency = smoothstep(warnStart, CFG.mapHalf, hd);
+    const urgency = smoothstep(warnStart, CFG.mapHalf, edgeDist);
     plane.rotateY(turn * (0.85 + urgency * 1.75) * dt);
-    if (hd > CFG.mapHalf) {
-      plane.position.x = nx * CFG.mapHalf;
-      plane.position.z = nz * CFG.mapHalf;
+    const overX = Math.abs(plane.position.x) > CFG.mapHalf;
+    const overZ = Math.abs(plane.position.z) > CFG.mapHalf;
+    if (overX) plane.position.x = Math.sign(plane.position.x) * CFG.mapHalf;
+    if (overZ) plane.position.z = Math.sign(plane.position.z) * CFG.mapHalf;
+    if (overX || overZ) {
       const push = (10 + urgency * 46) * dt;
       plane.position.x += cx * push;
       plane.position.z += cz * push;
@@ -8793,7 +10690,8 @@ function init() {
   camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 1, 20000);
   clock = new THREE.Clock();
 
-  scene.add(new THREE.HemisphereLight(0xc7dde8, 0x414b38, 0.58));
+  worldHemi = new THREE.HemisphereLight(0xc7dde8, 0x414b38, 0.58);
+  scene.add(worldHemi);
   worldSun = new THREE.DirectionalLight(0xffdb9f, 1.02);
   worldSun.position.copy(SHADOW_SUN_OFFSET);
   worldSun.castShadow = true;
@@ -8808,18 +10706,18 @@ function init() {
   worldSun.shadow.camera.updateProjectionMatrix();
   scene.add(worldSun);
   scene.add(worldSun.target);
-  const fill = new THREE.DirectionalLight(0x789fc2, 0.12);
-  fill.position.set(-900, 620, -780);
-  scene.add(fill);
+  worldFill = new THREE.DirectionalLight(0x789fc2, 0.12);
+  worldFill.position.set(-900, 620, -780);
+  scene.add(worldFill);
 
   createSky();
-  applySeed(randomSeedStr());        // 种子生成世界（地形 / 水 / 植被 / 云 / 城市）
+  currentSeed = randomSeedStr();     // 先进入种子界面，确认后才生成完整世界
 
   BOMB_PROTO = makeBombProto();
 
   plane = createPlane();
   scene.add(plane);
-  resetPlane();
+  plane.visible = false;
 
   /* 投弹落点图标 —— 红色、与地面平行（机炮准星同款元素拍平），由 updateAim 定位 */
   bombMark = new THREE.Group();
@@ -8880,8 +10778,6 @@ function init() {
     if (!document.hidden && Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
   });
 
-  updateCamera(1);
-  updateHUD();
   animate();
 }
 
@@ -8906,7 +10802,11 @@ function animate() {
 ========================================================= */
 if (typeof THREE === 'undefined') {
   document.getElementById('panel').innerHTML =
-    '<h1>加载失败</h1><p>Three.js 没有加载成功，检查一下网络再刷新吧。</p>';
+    '<div class="result-view"><div class="result-card">' +
+      '<div class="result-kicker">ENGINE OFFLINE</div>' +
+      '<h1>飞行引擎未载入</h1>' +
+      '<p>Three.js 没有加载成功。检查网络连接后刷新页面即可重试。</p>' +
+    '</div></div>';
 } else {
   init();
 }

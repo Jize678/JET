@@ -26,6 +26,11 @@
   .hud-item .hpbar{width:76px;height:9px;border-radius:5px;margin-top:5px;
                    background:rgba(255,116,118,.14);overflow:hidden}
   #hpFill{height:100%;width:100%;border-radius:5px;background:#ff6268}
+  #missileHud{min-width:88px}
+  #missileHud[hidden]{display:none}
+  #missileHud .val{color:#9fefff}
+  #hudMissileStatus{margin-top:4px;font-size:8px;line-height:1.2;letter-spacing:.05em;
+            color:rgba(184,232,244,.72);white-space:nowrap}
   #dmgFlash{position:fixed;inset:0;pointer-events:none;opacity:0;
             background:rgba(255,40,20,.34)}
   #lockMark{position:fixed;left:50%;top:50%;width:46px;height:46px;display:none;
@@ -39,6 +44,13 @@
             border:1px solid rgba(255,112,116,.55);color:#ffe2df;font-size:12px;
             letter-spacing:1px;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap}
   #edgeWarn.show{opacity:1;transform:translate(-50%,0)}
+  #weaponWarn{position:fixed;left:50%;top:122px;transform:translate(-50%,-7px);
+            padding:8px 15px;border-radius:9px;background:rgba(25,12,15,.90);
+            border:1px solid rgba(255,112,116,.38);color:#ffe4df;font-size:11px;
+            letter-spacing:.06em;opacity:0;pointer-events:none;
+            transition:opacity .16s,transform .16s,border-color .16s;white-space:nowrap}
+  #weaponWarn.show{opacity:1;transform:translate(-50%,0)}
+  #weaponWarn.ready{border-color:rgba(111,222,243,.58);color:#c9f7ff}
   #grade{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;transition:opacity .45s ease}
   #grade.golden{opacity:1;background:
            radial-gradient(ellipse at 52% 43%,rgba(255,205,122,0) 32%,rgba(88,30,8,.08) 70%,rgba(18,8,5,.34) 100%)}
@@ -60,6 +72,13 @@
   .start-shell{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;
            animation:screenIn .34s cubic-bezier(.2,.75,.25,1) both}
   @keyframes screenIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .screen-back-row{display:flex;align-items:center;flex:none;min-height:38px;padding:0 2px 8px}
+  .screen-back{display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 11px;
+           border-radius:9px;border:1px solid rgba(181,226,241,.18);
+           background:rgba(18,33,41,.52);color:rgba(221,246,253,.72);
+           font-family:inherit;font-size:10px;letter-spacing:.08em;cursor:pointer;
+           transition:background .16s,border-color .16s,color .16s}
+  .screen-back:hover{background:rgba(37,58,68,.72);border-color:rgba(145,222,247,.38);color:#effdff}
 
   .start-topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;
            min-height:58px;padding:0 2px 15px;border-bottom:1px solid rgba(198,234,247,.14);flex:none}
@@ -235,6 +254,123 @@
   .setup-meta strong{display:block;margin-top:3px;font-size:10px;color:rgba(230,249,254,.74);
            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+  /* ---------- 座驾选择 / 机库 ---------- */
+  .aircraft-stage{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.28fr) minmax(350px,.72fr);
+           gap:clamp(18px,2.5vw,38px);padding:clamp(16px,2.8vh,30px) 0}
+  .aircraft-showcase{min-width:0;min-height:0;display:flex;flex-direction:column;gap:11px}
+  .aircraft-showcase-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:0 3px}
+  .aircraft-showcase-head h2{margin-top:7px;font-size:clamp(20px,2.4vw,31px);
+           line-height:1.05;letter-spacing:-.035em;font-weight:840}
+  .aircraft-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9px;
+           letter-spacing:.16em;color:rgba(199,237,249,.43);white-space:nowrap}
+  .aircraft-preview-frame{position:relative;flex:1;min-height:360px;overflow:hidden;border-radius:23px;
+           border:1px solid rgba(255,112,116,.27);
+           background:
+             radial-gradient(ellipse at 50% 70%,rgba(221,76,83,.13),transparent 42%),
+             radial-gradient(ellipse at 72% 22%,rgba(86,189,219,.12),transparent 34%),
+             linear-gradient(150deg,#190a0e 0%,#251016 48%,#13090d 100%);
+           box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 22px 60px rgba(0,0,0,.24)}
+  .aircraft-preview-frame::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:.20;
+           background-image:linear-gradient(rgba(136,211,235,.18) 1px,transparent 1px),
+                            linear-gradient(90deg,rgba(136,211,235,.18) 1px,transparent 1px);
+           background-size:44px 44px;
+           mask-image:radial-gradient(ellipse at 50% 55%,#000 12%,transparent 72%);
+           -webkit-mask-image:radial-gradient(ellipse at 50% 55%,#000 12%,transparent 72%)}
+  .aircraft-preview-frame::after{content:'';position:absolute;inset:0;pointer-events:none;
+           background:linear-gradient(180deg,rgba(255,255,255,.025),transparent 24%,transparent 74%,rgba(255,74,84,.035));
+           box-shadow:inset 0 0 80px rgba(0,0,0,.32)}
+  #aircraftPreview{position:absolute;inset:0;z-index:2;display:block;width:100%;height:100%;
+           cursor:grab;touch-action:none}
+  #aircraftPreview.dragging{cursor:grabbing}
+  .aircraft-nameplate{position:absolute;z-index:3;left:clamp(16px,2vw,28px);bottom:clamp(15px,2vw,25px);
+           pointer-events:none;padding-left:14px;border-left:2px solid #ff6d74}
+  .aircraft-nameplate span{display:block;font-size:8px;letter-spacing:.22em;color:rgba(208,238,247,.42)}
+  .aircraft-nameplate h1{margin-top:5px;font-size:clamp(30px,4vw,54px);line-height:.95;
+           letter-spacing:-.045em;font-weight:880;text-shadow:0 8px 30px rgba(0,0,0,.35)}
+  .aircraft-nameplate p{margin-top:7px;font-size:10px;letter-spacing:.09em;color:#ffb0ad}
+  .aircraft-reticle{position:absolute;z-index:1;left:50%;top:52%;width:min(62%,520px);aspect-ratio:1/1;
+           transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
+           border:1px solid rgba(112,211,238,.10);
+           box-shadow:0 0 0 24px rgba(112,211,238,.018),0 0 0 68px rgba(255,91,98,.018)}
+  .aircraft-reticle::before,.aircraft-reticle::after{content:'';position:absolute;background:rgba(126,219,241,.18)}
+  .aircraft-reticle::before{left:50%;top:7%;bottom:7%;width:1px}
+  .aircraft-reticle::after{left:7%;right:7%;top:50%;height:1px}
+  .aircraft-drag-hint{position:absolute;z-index:3;right:16px;top:15px;padding:6px 9px;border-radius:7px;
+           border:1px solid rgba(172,226,242,.13);background:rgba(8,19,25,.42);
+           font-size:8px;letter-spacing:.1em;color:rgba(203,237,247,.45);pointer-events:none}
+  .aircraft-showcase-foot{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:0 3px}
+  .aircraft-showcase-foot div{padding:9px 11px;border-left:1px solid rgba(255,116,121,.22)}
+  .aircraft-showcase-foot span{display:block;font-size:7px;letter-spacing:.18em;color:rgba(199,233,243,.31)}
+  .aircraft-showcase-foot strong{display:block;margin-top:4px;font-size:10px;letter-spacing:.05em;color:rgba(234,250,255,.78)}
+
+  .aircraft-select-column{min-height:0;overflow:auto;padding-right:3px;display:flex;flex-direction:column;
+           justify-content:center;scrollbar-width:thin;scrollbar-color:rgba(255,112,116,.30) transparent}
+  .aircraft-select-column::-webkit-scrollbar{width:5px}
+  .aircraft-select-column::-webkit-scrollbar-thumb{background:rgba(255,112,116,.30);border-radius:4px}
+  .aircraft-select-inner{width:min(430px,100%);margin:0 auto}
+  .aircraft-select-intro{padding:1px 2px 14px}
+  .aircraft-select-intro h2{margin-top:9px;font-size:clamp(25px,3vw,38px);line-height:1.05;
+           letter-spacing:-.04em;font-weight:860}
+  .aircraft-select-intro p{margin-top:9px;font-size:12px;line-height:1.65;color:rgba(207,236,246,.56)}
+  .aircraft-list{display:flex;flex-direction:column;gap:8px}
+  .aircraft-card{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;
+           gap:12px;width:100%;min-height:76px;padding:12px 13px;border-radius:15px;cursor:pointer;
+           text-align:left;font-family:inherit;color:#fff2ef;border:1px solid rgba(255,112,116,.20);
+           background:linear-gradient(105deg,#301318,#251015);transition:border-color .16s,background .16s,transform .16s}
+  .aircraft-card:hover{transform:translateY(-1px);border-color:rgba(255,139,143,.48);background:#39171d}
+  .aircraft-card.active{border-color:#ff7379;background:linear-gradient(105deg,#5c1d26,#35141a);
+           box-shadow:inset 0 0 0 1px rgba(255,201,200,.10),0 12px 34px rgba(50,5,12,.22)}
+  .aircraft-card-index{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;
+           border:1px solid rgba(167,222,239,.15);background:rgba(4,16,23,.30);
+           font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:#93dff4}
+  .aircraft-card-copy strong{display:block;font-size:18px;line-height:1.1;letter-spacing:.02em}
+  .aircraft-card-copy small{display:block;margin-top:5px;font-size:10px;letter-spacing:.09em;
+           color:rgba(219,241,248,.55)}
+  .aircraft-card-state{font-size:10px;letter-spacing:.09em;color:#ff9ca0;white-space:nowrap}
+  .aircraft-card.active .aircraft-card-state::before{content:'';display:inline-block;width:6px;height:6px;
+           margin-right:6px;border-radius:50%;background:#ff747b;box-shadow:0 0 9px rgba(255,93,102,.70)}
+  .aircraft-reserved{display:grid;grid-template-columns:42px minmax(0,1fr);align-items:center;gap:12px;
+           min-height:58px;padding:10px 13px;border-radius:13px;border:1px dashed rgba(181,221,234,.12);
+           color:rgba(200,231,241,.27);background:rgba(5,16,22,.15)}
+  .aircraft-reserved span:first-child{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+           font-size:10px;text-align:center}
+  .aircraft-reserved strong{display:block;font-size:12px;letter-spacing:.04em}
+  .aircraft-reserved small{display:block;margin-top:3px;font-size:10px;letter-spacing:.06em}
+  .aircraft-spec-card{margin-top:10px;padding:14px;border-radius:15px;border:1px solid rgba(173,223,239,.12);
+           background:rgba(5,19,27,.34)}
+  .aircraft-spec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
+  .aircraft-spec-head h3{font-size:12px;letter-spacing:.12em;color:rgba(235,251,255,.90)}
+  .aircraft-spec-head span{font-size:10px;letter-spacing:.08em;color:#9be4f6}
+  .aircraft-spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+  .aircraft-spec-grid div{padding-top:7px;border-top:1px solid rgba(178,226,241,.09)}
+  .aircraft-spec-grid span{display:block;font-size:9px;letter-spacing:.10em;color:rgba(210,238,247,.48)}
+  .aircraft-spec-grid strong{display:block;margin-top:5px;font-size:12px;font-weight:700;color:rgba(241,252,255,.88)}
+  .aircraft-description{margin-top:12px;font-size:11px;line-height:1.65;color:rgba(216,238,246,.55)}
+  .aircraft-launch{margin-top:12px}
+  .aircraft-launch .btn-primary{margin-top:0}
+  .aircraft-launch .btn-ghost{margin-top:6px}
+
+  .game-menu-view{height:100%;display:grid;place-items:center;animation:screenIn .22s ease both}
+  .game-menu-card{width:min(430px,92vw);padding:30px;border-radius:22px;
+           border:1px solid rgba(255,112,116,.28);background:#281015;
+           box-shadow:0 24px 70px rgba(0,0,0,.38)}
+  .game-menu-card h1{margin-top:8px;font-size:clamp(30px,4vw,42px);letter-spacing:-.04em}
+  .game-menu-card p{margin-top:9px;font-size:11px;line-height:1.7;color:rgba(216,240,248,.55)}
+  .game-menu-options{display:flex;flex-direction:column;gap:9px;margin-top:23px}
+  .game-menu-option{display:flex;align-items:center;justify-content:space-between;gap:16px;
+           width:100%;min-height:58px;padding:0 17px;border-radius:14px;cursor:pointer;
+           border:1px solid rgba(255,118,122,.26);background:#38161b;color:#fff0ed;
+           font-family:inherit;text-align:left;transition:background .16s,border-color .16s,transform .16s}
+  .game-menu-option:hover{background:#481b23;border-color:rgba(255,132,136,.52)}
+  .game-menu-option:active{transform:scale(.985)}
+  .game-menu-option.primary{background:#d94750;border-color:#ff7d83}
+  .game-menu-option.primary:hover{background:#e3535b}
+  .game-menu-option strong{display:block;font-size:14px;letter-spacing:.04em}
+  .game-menu-option small{display:block;margin-top:4px;font-size:9px;color:rgba(255,224,221,.58)}
+  .game-menu-option.primary small{color:rgba(255,245,243,.72)}
+  .menu-arrow{font-size:18px;opacity:.72}
+  .game-menu-hint{margin-top:15px;text-align:center;font-size:9px;letter-spacing:.08em;color:rgba(203,232,242,.36)}
+
   .result-view{height:100%;display:grid;place-items:center;animation:screenIn .3s ease both}
   .result-card{width:min(520px,94vw);padding:34px 30px;text-align:center;border-radius:24px;
            border:1px solid rgba(255,112,116,.26);background:#2a1115;
@@ -251,6 +387,7 @@
     .hero-copy h1{font-size:clamp(36px,7vw,58px)}
     .hero-stats{margin-top:18px}
     .setup-stage{grid-template-columns:minmax(0,1.05fr) minmax(330px,.95fr)}
+    .aircraft-stage{grid-template-columns:minmax(0,1.08fr) minmax(330px,.92fr)}
     .map-legend{display:none}
   }
   @media (max-height:720px){
@@ -265,19 +402,26 @@
     .setup-intro h2{font-size:26px}.setup-intro p{margin-top:6px}
     .setup-card{padding:12px}.count-card{padding:8px 0}
     #mapCanvas{width:min(100%,calc(100vh - 190px))}
+    .aircraft-stage{padding-top:12px}
+    .aircraft-preview-frame{min-height:310px}
+    .aircraft-showcase-foot div{padding-top:6px;padding-bottom:6px}
+    .aircraft-select-intro h2{font-size:28px}
   }
   @media (max-aspect-ratio:1/1){
     #overlay{overflow:auto;align-items:flex-start}
     #panel{height:auto;min-height:calc(100vh - 28px)}
     .start-shell{height:auto;min-height:calc(100vh - 28px)}
-    .seed-stage,.loading-stage,.setup-stage{grid-template-columns:1fr}
+    .seed-stage,.loading-stage,.setup-stage,.aircraft-stage{grid-template-columns:1fr}
     .seed-stage{padding-top:34px;padding-bottom:34px}
     .loading-emblem{display:none}
     .loading-stage{padding-top:44px}
     .setup-stage{display:flex;flex-direction:column}
+    .aircraft-stage{display:flex;flex-direction:column}
     .map-frame{min-height:320px;flex:none}
     #mapCanvas{width:min(100%,68vh)}
     .setup-column{overflow:visible}
+    .aircraft-preview-frame{min-height:330px;flex:none}
+    .aircraft-select-column{overflow:visible}
     .start-footer{display:none}
   }
 </style>
@@ -290,10 +434,14 @@
     <div class="hud-item"><span class="label">得分</span><span class="val" id="hudScore">0</span></div>
     <div class="hud-item"><span class="label">击毁敌方单位</span><span class="val" id="hudDestroyed">0</span></div>
     <div class="hud-item"><span class="label">高度</span><span class="val" id="hudAlt">0</span></div>
+    <div class="hud-item" id="missileHud" hidden><span class="label">霹雳挂载</span>
+      <span class="val" id="hudMissile">0</span>
+      <span id="hudMissileStatus">R 锁定 · 右键发射</span></div>
   </div>
   <div id="dmgFlash"></div>
   <div id="lockMark"></div>
   <div id="edgeWarn">已到达战区边界 · 自动返航</div>
+  <div id="weaponWarn" role="status"></div>
 </div>
 <div id="grade"></div>
 
@@ -335,12 +483,22 @@ const CUT_SPOOL_UP  = 1.0;     // 松开后推力恢复速率（/s）
 const CUT_SINK_RATE = 1.0;     // 低头角速度上限（rad/s，乘以失推力比例）
 const CUT_SINK_MAX  = -0.5;    // 下坠收敛下滑角（机头方向 y 分量，约 -30°）
 
+/* 歼-10 霹雳主动雷达导弹：射后不管，持续追踪发射瞬间的 R 锁定目标 */
+const PL_SPEED_MIN   = 135;
+const PL_SPEED_MAX   = 330;
+const PL_ACCEL       = 260;
+const PL_TURN_RATE   = 3.1;
+const PL_MISSILE_LIFE = 11;
+const PL_HIT_RADIUS  = 13;
+const PL_REPLENISH_INTERVAL = 15;
+
 const G = {
   started:false, over:false, crashing:false, crashTime:0,
   score:0, destroyed:0, fireTimer:0, shake:0, bulletSide:1,
-  aiming:false, boost:0, cursorHidden:false,
+  aiming:false, menuOpen:false, boost:0, cursorHidden:false,
   hp:32, hpMax:32, invuln:0, hitFlash:0,
-  thrust:1, lockTarget: null, engCut: false, lightMode:'golden'
+  thrust:1, lockTarget: null, engCut: false, lightMode:'golden',
+  missileAmmo:0, missileCooldown:0, missileReloadTimer:0
 };
 
 const keys = { left:false, right:false, up:false, down:false, fire:false, boost:false, engineCut:false };
@@ -349,6 +507,7 @@ let scene, camera, renderer, clock, worldSun, worldFill, worldHemi, worldSky;
 let plane, bombMark, gunReticle;
 const bombs = [], bullets = [], effects = [], buildings = [];
 const aaaGuns = [], samSites = [], enemies = [], eBullets = [], missiles = [];
+const playerMissiles = [];
 const wingmen = [], wingRespawn = [0, 0];
 const windTurbines = [];
 const railTrains = [];
@@ -768,31 +927,11 @@ function* genWorldSteps(seedNum) {
     }
   }
 
-  yield 'cities';
-  /* 城市：1~2 座（单座大小 1~3 倍随机等比缩放；以 RX 620 / RZ 600 为 1 倍参考） */
-  const cCount = rng() < 0.5 ? 1 : 2;
-  for (let i = 0; i < cCount; i++) {
-    for (let t = 0; t < 240; t++) {
-      const cs = 1 + rng() * 2;                       // 1~3 倍
-      const rx = 620 * cs, rz = 600 * cs;
-      const cx = (rng() * 2 - 1) * Math.max(250, WORLD_HALF - rx - 250);
-      const cz = (rng() * 2 - 1) * Math.max(250, WORLD_HALF - rz - 250);
-      if (Math.hypot(cx - SPAWN_X, cz - SPAWN_Z) < rx + 1000) continue;
-      let ok = true;
-      for (const c of g.cities) if (Math.hypot(cx - c.x, cz - c.z) < c.rx * 0.9 + rx * 0.9 + 900) { ok = false; break; }
-      for (const m of g.mountains) if (Math.hypot(cx - m.x, cz - m.z) < m.mrx * 0.8 + rx * 0.7 + 500) { ok = false; break; }
-      if (!ok) continue;
-      g.cities.push({ x: cx, z: cz, rx, rz, s: cs });
-      break;
-    }
-  }
-  if (g.cities.length === 0) g.cities.push({ x: 0, z: 0, rx: 620, rz: 600, s: 1 });   // 兜底（极少数种子）
-
   yield 'rivers';
-  /* 河流：1~2 条（正弦叠加中心线；避开城市与出生地） */
+  /* 河流优先于城市生成，保证城市数量放开后每张图仍有完整水系。 */
   const rCount = 1 + (rng() < 0.38 ? 1 : 0);
   for (let i = 0; i < rCount; i++) {
-    for (let t = 0; t < 80; t++) {
+    for (let t = 0; t < 420; t++) {
       const rv = {
         dir: rng() < 0.5 ? 'z' : 'x',
         base: (rng() * 2 - 1) * WORLD_HALF * 0.5,
@@ -807,15 +946,41 @@ function* genWorldSteps(seedNum) {
         const px = rv.dir === 'z' ? off : c;
         const pz = rv.dir === 'z' ? c : off;
         if (Math.hypot(px - SPAWN_X, pz - SPAWN_Z) < 700) ok = false;
-        for (const ct of g.cities) {
-          if (Math.abs(px - ct.x) < ct.rx + 220 && Math.abs(pz - ct.z) < ct.rz + 220) ok = false;
-        }
       }
       if (!ok) continue;
       g.rivers.push(rv);
       break;
     }
   }
+
+  yield 'cities';
+  /* 城市：不再预设数量上限；由可用地形持续落位，直到连续多次找不到合法位置。 */
+  let cityTries = 0, cityMisses = 0;
+  while (cityTries < 900 && cityMisses < 140) {
+    cityTries++;
+    const cs = 1 + rng() * 2;
+    const rx = 620 * cs, rz = 600 * cs;
+    const cx = (rng() * 2 - 1) * Math.max(250, WORLD_HALF - rx - 250);
+    const cz = (rng() * 2 - 1) * Math.max(250, WORLD_HALF - rz - 250);
+    if (Math.hypot(cx - SPAWN_X, cz - SPAWN_Z) < rx + 1000) { cityMisses++; continue; }
+    let ok = true;
+    for (const c of g.cities) if (Math.hypot(cx - c.x, cz - c.z) < c.rx * 0.9 + rx * 0.9 + 900) { ok = false; break; }
+    for (const m of g.mountains) if (Math.hypot(cx - m.x, cz - m.z) < m.mrx * 0.8 + rx * 0.7 + 500) { ok = false; break; }
+    if (ok) for (const r of g.rivers) {
+      for (let k = 0; k <= 40; k++) {
+        const c = -WORLD_HALF + 2 * WORLD_HALF * k / 40;
+        const off = r.base + Math.sin(c * r.f1 + r.ph1) * r.a1 + Math.sin(c * r.f2 + r.ph2) * r.a2;
+        const px = r.dir === 'z' ? off : c;
+        const pz = r.dir === 'z' ? c : off;
+        if (Math.abs(px - cx) < rx + 240 && Math.abs(pz - cz) < rz + 240) { ok = false; break; }
+      }
+      if (!ok) break;
+    }
+    if (!ok) { cityMisses++; continue; }
+    g.cities.push({ x: cx, z: cz, rx, rz, s: cs });
+    cityMisses = 0;
+  }
+  if (g.cities.length === 0) g.cities.push({ x: 0, z: 0, rx: 620, rz: 600, s: 1 });
 
   yield 'lakes';
   /* 湖泊：0~2 个（谐波岸线；避开城市与出生地） */
@@ -843,6 +1008,8 @@ function* genWorldSteps(seedNum) {
   /* ---- 第二层：乡村 → 路网 → 农田 → 树林（泰拉瑞亚式逐层叠加，后层避让前层） ---- */
   yield 'villages';
   genVillages(g, rng);
+  yield 'terrainBase';
+  bakeTerrainHeightGrid(g, true);
   yield 'roads';
   genRoads(g, rng);
   yield 'cityRoads';
@@ -867,6 +1034,8 @@ function* genWorldSteps(seedNum) {
   genRocks(g, rng);
   yield 'terrainSmooth';
   bakeTerrainHeightGrid(g);
+  yield 'transportClearance';
+  auditTransportClearance(g);
   yield 'audit';
   auditBridgePlacement(g);
 
@@ -947,7 +1116,7 @@ function buildRoadCostGrid(g) {
     const x = -WORLD_HALF + (ix + 0.5) * CELL;
     for (let iz = 0; iz < N; iz++) {
       const z = -WORLD_HALF + (iz + 0.5) * CELL;
-      const h = rawHeight(g, x, z);
+      const h = groundHeight(g, x, z);
       let c = 1;
       if (h < WATER_LEVEL + 3) c += 4000;        // 尽量不过水
       if (h > 280) c += (h - 280) * 5;           // 尽量不翻高山
@@ -1106,7 +1275,7 @@ function findRoadPath(g, grid, A, B) {
   pts = chaikinPath(pts, 3);
   pts = resamplePath(pts, 26);
 
-  const road = pts.map(p => ({ x: p.x, z: p.z, h: rawHeight(g, p.x, p.z) }));
+  const road = pts.map(p => ({ x: p.x, z: p.z, h: groundHeight(g, p.x, p.z) }));
   for (let pass = 0; pass < 3; pass++) {
     for (let i = 1; i < road.length - 1; i++) {
       road[i].h = road[i - 1].h * 0.25 + road[i].h * 0.5 + road[i + 1].h * 0.25;
@@ -1317,13 +1486,13 @@ function connectCityRoads(g) {
     const line = best.pts.map((p, i) => {
       const t = i / Math.max(1, best.pts.length - 1);
       return {
-        x: p.x, z: p.z, h: rawHeight(g, p.x, p.z), bridge: false,
+        x: p.x, z: p.z, h: groundHeight(g, p.x, p.z), bridge: false,
         cityLink: true,
         asphaltHalf: gate.half + (LINK_ASPHALT_HALF - gate.half) * t,
         shoulderHalf: gate.half + 5.5 + (LINK_SHOULDER_HALF - gate.half - 5.5) * t
       };
     });
-    line[0].h = rawHeight(g, gate.x, gate.z);
+    line[0].h = groundHeight(g, gate.x, gate.z);
     line[line.length - 1].h = end.h;
     if (fromStart) {
       const tail = road.slice(ei + 1);
@@ -1377,7 +1546,7 @@ function buildRoadField(g) {
           const w = d <= ROAD_HALF_FLAT ? 1 : smoothstep(ROAD_HALF_BLEND, ROAD_HALF_FLAT, d);
           const k = ix * N + iz;
           if (w > W[k]) {
-            if (rawHeight(g, px, pz) < WATER_LEVEL - 0.5) continue;   // 河床不填，留给桥梁
+            if (groundHeight(g, px, pz) < WATER_LEVEL - 0.5) continue;   // 河床不填，留给桥梁
             W[k] = w; H[k] = a.h + (b.h - a.h) * t;
           }
         }
@@ -1419,7 +1588,7 @@ const ROAD_STRUCTURE_TOP = 0.30;   // 桥侧结构相对桥面基准的最高点
 const ROAD_SURFACE_LIFT = 0.66;    // 沥青相对桥面基准的高度
 
 function roadGroundHeight(g, x, z) {
-  let h = rawHeight(g, x, z);
+  let h = groundHeight(g, x, z);
   if (g.roadN && g.roadW) {
     const w = sampleRoadField(g, x, z);
     if (w > 0) h = h * (1 - w) + _roadH * w;
@@ -1442,7 +1611,7 @@ function designRoadBridges(g) {
     }
     for (let i = 1; i < road.length - 1; i++) {
       const p = road[i];
-      p.bridge = rawHeight(g, p.x, p.z) < WATER_LEVEL + 1.8 ||
+      p.bridge = groundHeight(g, p.x, p.z) < WATER_LEVEL + 1.8 ||
         roadGroundHeight(g, p.x, p.z) < WATER_LEVEL + 1.2;
     }
     const groups = [];
@@ -1611,7 +1780,10 @@ function auditBridgePlacement(g) {
       i = e + 1;
     }
   }
-  if (audit.maxRailApproachGrade > 0.05) audit.errors.push('rail bridge approach too steep');
+  if (audit.maxRailGrade > RAIL_MAX_GRADE + 1e-5) audit.errors.push('rail grade exceeds limit');
+  if (audit.maxRailApproachGrade > RAIL_MAX_GRADE + 1e-5) {
+    audit.errors.push('rail bridge approach too steep');
+  }
   g.bridgeAudit = audit;
 }
 
@@ -1622,7 +1794,9 @@ const RAIL_FIELD_CELL = 10;
 const RAIL_HALF_FLAT = 14;
 const RAIL_HALF_BLEND = 30;
 const RAIL_APPROACH_GRADE = 0.040;
+const RAIL_MAX_GRADE = 0.200;
 const RAIL_MIN_APPROACH = 100;
+const RAIL_MIN_CURVE_RADIUS = 60;
 
 let _railW = 0, _railH = 0;
 
@@ -1685,6 +1859,102 @@ function buildRailField(g) {
   g.railW = W; g.railH = H;
 }
 
+/* 道路 / 铁路全宽穿模审计：检测最终高度场是否高过路面，并在走廊内向下修正。 */
+function auditTransportClearance(g) {
+  const f = g.heightGrid;
+  if (!f) return;
+  const audit = {
+    roadRepairs: 0, railRepairs: 0,
+    roadSamples: 0, railSamples: 0,
+    maxRoadPenetration: 0, maxRailPenetration: 0
+  };
+  const lowerAt = (x, z, target, core, blend) => {
+    const minIx = Math.max(0, Math.floor((x - core - blend - f.x0) / f.dx));
+    const maxIx = Math.min(f.n - 1, Math.ceil((x + core + blend - f.x0) / f.dx));
+    const minIz = Math.max(0, Math.floor((z - core - blend - f.z0) / f.dz));
+    const maxIz = Math.min(f.n - 1, Math.ceil((z + core + blend - f.z0) / f.dz));
+    const want = target - 0.12;
+    let changed = 0;
+    for (let iz = minIz; iz <= maxIz; iz++) {
+      const pz = f.z0 + iz * f.dz;
+      for (let ix = minIx; ix <= maxIx; ix++) {
+        const px = f.x0 + ix * f.dx;
+        const d = Math.hypot(px - x, pz - z);
+        if (d > core + blend) continue;
+        const k = iz * f.n + ix;
+        if (f.data[k] <= want) continue;
+        if (d <= core) {
+          f.data[k] = want;
+        } else {
+          const w = smoothstep(core + blend, core, d);
+          const blended = f.data[k] * (1 - w) + want * w;
+          f.data[k] = Math.min(f.data[k], blended);
+        }
+        changed++;
+      }
+    }
+    return changed;
+  };
+
+  for (const road of g.roads) {
+    for (let i = 0; i < road.length; i++) {
+      const p = road[i];
+      if (!p) continue;
+      const h = p.designH !== undefined ? p.designH : p.h;
+      const half = p.asphaltHalf || 10.5;
+      const core = (p.shoulderHalf || 17) + 2.0;
+      audit.roadRepairs += lowerAt(p.x, p.z, h, core, ROAD_HALF_BLEND);
+      if (i + 1 < road.length) {
+        const q = road[i + 1];
+        const qh = q.designH !== undefined ? q.designH : q.h;
+        const qcore = (q.shoulderHalf || 17) + 2.0;
+        audit.roadRepairs += lowerAt((p.x + q.x) * 0.5, (p.z + q.z) * 0.5,
+          (h + qh) * 0.5, (core + qcore) * 0.5,
+          ROAD_HALF_BLEND);
+      }
+    }
+  }
+  for (const line of (g.railways || [])) {
+    for (let i = 0; i < line.length; i++) {
+      const p = line[i];
+      if (!p) continue;
+      audit.railRepairs += lowerAt(p.x, p.z, p.h - 0.25, 9.0, RAIL_HALF_BLEND + 18);
+      if (i + 1 < line.length) {
+        const q = line[i + 1];
+        audit.railRepairs += lowerAt((p.x + q.x) * 0.5, (p.z + q.z) * 0.5,
+          (p.h + q.h) * 0.5 - 0.25, 9.0, RAIL_HALF_BLEND + 18);
+      }
+    }
+  }
+
+  const inspect = (x, z, surface) => {
+    const ground = sampleHeightGrid(f, x, z);
+    return Math.max(0, ground - surface);
+  };
+  for (const road of g.roads) {
+    for (const p of road) {
+      const h = p.designH !== undefined ? p.designH : p.h;
+      const half = (p.asphaltHalf || 10.5) * 0.82;
+      const dx = half * 0.707, dz = half * 0.707;
+      audit.maxRoadPenetration = Math.max(audit.maxRoadPenetration,
+        inspect(p.x, p.z, h + 0.66),
+        inspect(p.x + dx, p.z - dz, h + 0.66),
+        inspect(p.x - dx, p.z + dz, h + 0.66));
+      audit.roadSamples += 3;
+    }
+  }
+  for (const line of (g.railways || [])) {
+    for (const p of line) {
+      audit.maxRailPenetration = Math.max(audit.maxRailPenetration,
+        inspect(p.x, p.z, p.h + 0.1),
+        inspect(p.x + 3.2, p.z, p.h + 0.1),
+        inspect(p.x - 3.2, p.z, p.h + 0.1));
+      audit.railSamples += 3;
+    }
+  }
+  g.transportAudit = audit;
+}
+
 function sampleRailField(g, x, z) {
   const N = g.railN;
   if (!N || !g.railW) return 0;
@@ -1731,7 +2001,7 @@ function stationSiteOK(g, x, z, rot, len, wid) {
       const px = x + c * lx + s * lz;
       const pz = z - s * lx + c * lz;
       if (Math.abs(px) > WORLD_HALF - 80 || Math.abs(pz) > WORLD_HALF - 80) return false;
-      if (rawHeight(g, px, pz) < WATER_LEVEL + 7) return false;
+      if (groundHeight(g, px, pz) < WATER_LEVEL + 7) return false;
       if (roadAt(g, px, pz) > 0.025) return false;
       for (const v of g.villages) {
         if (Math.hypot(px - v.x, pz - v.z) < v.r + 70) return false;
@@ -1745,7 +2015,51 @@ function genRailways(g, rng) {
   g.railStations = [];
   g.railways = [];
   if (!g.cities.length) return;
+  const stationWaterAt = (x, z) => {
+    if (groundHeight(g, x, z) < WATER_LEVEL + 2.4) return true;
+    for (const r of g.rivers) {
+      const c = r.dir === 'z' ? z : x;
+      const cen = r.base + Math.sin(c * r.f1 + r.ph1) * r.a1 +
+        Math.sin(c * r.f2 + r.ph2) * r.a2;
+      if (Math.abs((r.dir === 'z' ? x : z) - cen) < r.w * 3.1) return true;
+    }
+    for (const l of g.lakes) {
+      if (Math.hypot(x - l.x, z - l.z) < l.r * 1.16) return true;
+    }
+    return false;
+  };
+  const stationClearEnds = (x, z, rot, len) => {
+    const ux = Math.cos(rot), uz = -Math.sin(rot);
+    let clear = 0;
+    for (const sign of [-1, 1]) {
+      let ok = true;
+      for (let d = len * 0.46 + 14; d <= len * 0.46 + 220; d += 18) {
+        const px = x + ux * sign * d, pz = z + uz * sign * d;
+        if (roadAt(g, px, pz) > 0.012 || stationWaterAt(px, pz)) { ok = false; break; }
+      }
+      if (ok) clear++;
+    }
+    return clear;
+  };
   const stationOptions = [];
+  const makeStationAt = (x, z, ci, target, stationRot, len, wid, forced) => {
+    let hSum = 0, hN = 0;
+    const hc = Math.cos(stationRot), hs = Math.sin(stationRot);
+    for (let sx = -1; sx <= 1; sx++) {
+      for (let sz = -1; sz <= 1; sz++) {
+        const hx = x + hc * sx * len * 0.34 + hs * sz * wid * 0.34;
+        const hz = z - hs * sx * len * 0.34 + hc * sz * wid * 0.34;
+        hSum += groundHeight(g, hx, hz);
+        hN++;
+      }
+    }
+    return {
+      x, z, rot: stationRot, h: hSum / hN, len, wid,
+      cityIndex: ci, targetIndex: target, r: Math.max(len, wid) * 0.55,
+      clearEnds: stationClearEnds(x, z, stationRot, len),
+      forced: !!forced
+    };
+  };
 
   for (let ci = 0; ci < g.cities.length; ci++) {
     const ct = g.cities[ci];
@@ -1758,9 +2072,9 @@ function genRailways(g, rng) {
     const baseAng = target >= 0
       ? Math.atan2(g.cities[target].z - ct.z, g.cities[target].x - ct.x)
       : rng() * 6.2832;
-    const opts = [];
-    const offsets = [0, 0.18, -0.18, 0.36, -0.36, 0.54, -0.54];
-    for (let t = 0; t < 56 && opts.length < 3; t++) {
+    let opts = [];
+    const offsets = [0, 0.18, -0.18, 0.36, -0.36, 0.54, -0.54, 0.72, -0.72];
+    for (let t = 0; t < 120; t++) {
       const off = t < offsets.length ? offsets[t] : (rng() - 0.5) * 1.12;
       const ang = baseAng + off + (t ? (rng() - 0.5) * 0.045 : 0);
       const c = Math.cos(ang), s = Math.sin(ang);
@@ -1770,27 +2084,95 @@ function genRailways(g, rng) {
       const len = 138 + rng() * 34, wid = 58 + rng() * 10;
       const stationRot = -ang;
       if (!stationSiteOK(g, x, z, stationRot, len, wid)) continue;
-      let hSum = 0, hN = 0;
-      const hc = Math.cos(stationRot), hs = Math.sin(stationRot);
-      for (let sx = -1; sx <= 1; sx++) {
-        for (let sz = -1; sz <= 1; sz++) {
-          const hx = x + hc * sx * len * 0.34 + hs * sz * wid * 0.34;
-          const hz = z - hs * sx * len * 0.34 + hc * sz * wid * 0.34;
-          hSum += rawHeight(g, hx, hz);
-          hN++;
+      opts.push(makeStationAt(x, z, ci, target, stationRot, len, wid, false));
+    }
+    /* 城市被山、水或既有道路夹住时，站址必须仍有保底解；不能因为筛选过严让整座城市失去铁路。 */
+    if (!opts.length) {
+      let best = null;
+      const spans = [[132, 54], [118, 48], [104, 42]];
+      for (let pass = 0; pass < spans.length; pass++) {
+        const len = spans[pass][0], wid = spans[pass][1];
+        for (let t = 0; t < 72; t++) {
+          const ang = baseAng + t / 72 * Math.PI * 2 + (rng() - 0.5) * 0.025;
+          const c = Math.cos(ang), s = Math.sin(ang);
+          const boundary = 1 / Math.sqrt((c / ct.rx) ** 2 + (s / ct.rz) ** 2);
+          const dist = boundary * (1.075 + pass * 0.035) + 68 + (t % 5) * 18;
+          const x = ct.x + c * dist, z = ct.z + s * dist;
+          if (Math.abs(x) > WORLD_HALF - 72 || Math.abs(z) > WORLD_HALF - 72) continue;
+          const stationRot = -ang;
+          const made = makeStationAt(x, z, ci, target, stationRot, len, wid, true);
+          let penalty = Math.abs(made.h - groundHeight(g, ct.x, ct.z)) * 4;
+          const hc = Math.cos(stationRot), hs = Math.sin(stationRot);
+          for (const lx of [-len * 0.48, 0, len * 0.48]) {
+            for (const lz of [-wid * 0.34, 0, wid * 0.72]) {
+              const px = x + hc * lx + hs * lz;
+              const pz = z - hs * lx + hc * lz;
+              const gh = groundHeight(g, px, pz);
+              if (gh < WATER_LEVEL + 7) penalty += (WATER_LEVEL + 7 - gh) * 260;
+              if (roadAt(g, px, pz) > 0.025) penalty += 900;
+              for (const v of g.villages) {
+                const d = Math.hypot(px - v.x, pz - v.z);
+                if (d < v.r + 70) penalty += (v.r + 70 - d) * 6;
+              }
+            }
+          }
+          penalty -= made.clearEnds * 450;
+          if (!best || penalty < best.penalty) best = { station: made, penalty };
         }
       }
-      const made = {
-        x, z, rot: stationRot, h: hSum / hN, len, wid,
-        cityIndex: ci, targetIndex: target, r: Math.max(len, wid) * 0.55
-      };
-      opts.push(made);
+      if (best) opts.push(best.station);
+      else {
+        const c = Math.cos(baseAng), s = Math.sin(baseAng);
+        const boundary = 1 / Math.sqrt((c / ct.rx) ** 2 + (s / ct.rz) ** 2);
+        const x = ct.x + c * (boundary * 1.08 + 64);
+        const z = ct.z + s * (boundary * 1.08 + 64);
+        opts.push(makeStationAt(x, z, ci, target, -baseAng, 104, 42, true));
+      }
     }
+    opts.sort((a, b) => b.clearEnds - a.clearEnds ||
+      Math.hypot(a.x - ct.x, a.z - ct.z) - Math.hypot(b.x - ct.x, b.z - ct.z));
+    opts = opts.slice(0, 3);
     stationOptions.push(opts);
-    if (opts.length) g.railStations.push(opts[0]);
   }
-  if (g.cities.length < 2 || g.railStations.length < 2) return;
+  if (g.cities.length < 2) {
+    const st = stationOptions[0][0];
+    const ux = Math.cos(st.rot), uz = -Math.sin(st.rot);
+    const spur = [];
+    for (let k = -4; k <= 4; k++) {
+      spur.push({
+        x: st.x + ux * k * st.len * 0.085,
+        z: st.z + uz * k * st.len * 0.085,
+        h: st.h + 0.1, bridge: false, overRoad: false,
+        span: false, ramp: false, anchor: Math.abs(k) === 4,
+        stationEnd: Math.abs(k) === 4
+      });
+    }
+    g.railStations = [st];
+    g.railways.push(spur);
+    g.railTopologyAudit = {
+      stationCount: 1, cityCount: 1, edgeCount: 0,
+      connectedEdges: 0, disconnectedEdges: 0, reconstructedLinks: 1,
+      extraConnections: 0, emergencyConnections: 0,
+      servedCities: 1, connectedCities: 1, unservedCities: 0,
+      minCurveRadius: RAIL_MIN_CURVE_RADIUS, pathCurves: [Infinity]
+    };
+    return;
+  }
 
+  /* 先确定城市连通树，再为每城固定一个车站，避免同一城市的不同线路各接一套站台。 */
+  const edges = [];
+  const tree = [0];
+  while (tree.length < g.cities.length) {
+    let best = null;
+    for (const i of tree) for (let j = 0; j < g.cities.length; j++) {
+      if (tree.indexOf(j) >= 0) continue;
+      const d = Math.hypot(g.cities[i].x - g.cities[j].x, g.cities[i].z - g.cities[j].z);
+      if (!best || d < best.d) best = { i, j, d };
+    }
+    if (!best) break;
+    tree.push(best.j);
+    edges.push([best.i, best.j]);
+  }
   const N = RAIL_GRID_N, CELL = (WORLD_HALF * 2) / N;
   const hgt = new Float32Array(N * N);
   const cost = new Float32Array(N * N);
@@ -1798,7 +2180,7 @@ function genRailways(g, rng) {
     const x = -WORLD_HALF + (ix + 0.5) * CELL;
     for (let iz = 0; iz < N; iz++) {
       const z = -WORLD_HALF + (iz + 0.5) * CELL;
-      const h = rawHeight(g, x, z);
+      const h = groundHeight(g, x, z);
       let c = 1;
       if (h < WATER_LEVEL + 3) c += 1800;
       if (h > 320) c += (h - 320) * 7;
@@ -1813,6 +2195,186 @@ function genRailways(g, rng) {
       hgt[k] = h; cost[k] = c;
     }
   }
+
+  const railWaterAt = (x, z) => {
+    if (groundHeight(g, x, z) < WATER_LEVEL + 2.4) return true;
+    for (const r of g.rivers) {
+      const c = r.dir === 'z' ? z : x;
+      const cen = r.base + Math.sin(c * r.f1 + r.ph1) * r.a1 +
+        Math.sin(c * r.f2 + r.ph2) * r.a2;
+      if (Math.abs((r.dir === 'z' ? x : z) - cen) < r.w * 3.1) return true;
+    }
+    for (const l of g.lakes) {
+      if (Math.hypot(x - l.x, z - l.z) < l.r * 1.16) return true;
+    }
+    return false;
+  };
+
+  const relaxRailPath = (pts, minRadius) => {
+    for (let pass = 0; pass < 40; pass++) {
+      let changed = false;
+      const cp = pts.map(p => ({ x: p.x, z: p.z }));
+      for (let i = 1; i + 1 < pts.length; i++) {
+        const ax = cp[i].x - cp[i - 1].x, az = cp[i].z - cp[i - 1].z;
+        const bx = cp[i + 1].x - cp[i].x, bz = cp[i + 1].z - cp[i].z;
+        const al = Math.hypot(ax, az), bl = Math.hypot(bx, bz);
+        if (al < 1 || bl < 1) continue;
+        const dot = Math.max(-1, Math.min(1, (ax * bx + az * bz) / (al * bl)));
+        const radius = Math.acos(dot) > 1e-6 ? ((al + bl) * 0.5) / Math.acos(dot) : Infinity;
+        if (radius >= minRadius) continue;
+        const w = Math.min(0.58, 0.18 + (minRadius - radius) / minRadius * 0.6);
+        pts[i].x = cp[i].x * (1 - w) + (cp[i - 1].x + cp[i + 1].x) * 0.5 * w;
+        pts[i].z = cp[i].z * (1 - w) + (cp[i - 1].z + cp[i + 1].z) * 0.5 * w;
+        changed = true;
+      }
+      if (!changed) break;
+    }
+    return pts;
+  };
+
+  const levelRailBridgeGroups = path => {
+    for (let i = 1; i < path.length - 1;) {
+      if (!path[i] || !path[i].bridge) { i++; continue; }
+      let e = i;
+      while (e + 1 < path.length - 1 && path[e + 1].bridge) e++;
+      let deckY = WATER_LEVEL + 8;
+      for (let k = i; k <= e; k++) deckY = Math.max(deckY, path[k].h);
+      for (let k = i; k <= e; k++) {
+        path[k].h = deckY;
+        path[k].span = true;
+        path[k].ramp = false;
+      }
+      i = e + 1;
+    }
+    return path;
+  };
+
+  const gradeRailBridgeApproaches = path => {
+    for (let i = 1; i < path.length - 1;) {
+      if (!path[i] || !path[i].bridge) { i++; continue; }
+      let e = i;
+      while (e + 1 < path.length - 1 && path[e + 1].bridge) e++;
+      for (const side of [{ start: i, dir: -1 }, { start: e, dir: 1 }]) {
+        let prev = side.start;
+        for (let k = side.start + side.dir; k >= 0 && k < path.length; k += side.dir) {
+          if (path[k].bridge || path[k].anchor) break;
+          const step = Math.hypot(path[k].x - path[prev].x, path[k].z - path[prev].z) *
+            RAIL_APPROACH_GRADE;
+          path[k].h = Math.max(path[k].h, path[prev].h - step);
+          prev = k;
+        }
+      }
+      i = e + 1;
+    }
+    return path;
+  };
+
+  /* 全里程纵断面约束：站台端点和桥面为硬约束，其余节点做双向坡度投影。 */
+  const solveRailVertical = path => {
+    const n = path.length;
+    if (n < 2) return false;
+    let h = new Float64Array(n);
+    const pinned = new Uint8Array(n);
+    const groupOf = new Int32Array(n).fill(-1);
+    const groups = [];
+
+    for (let i = 0; i < n; i++) {
+      h[i] = groundHeight(g, path[i].x, path[i].z) + 0.15;
+    }
+    h[0] = path[0].h;
+    h[n - 1] = path[n - 1].h;
+    pinned[0] = pinned[n - 1] = 1;
+
+    for (let i = 1; i < n;) {
+      if (!path[i] || !path[i].bridge) { i++; continue; }
+      const s = i;
+      while (i + 1 < n && path[i + 1].bridge) i++;
+      const e = i;
+      let maxGround = -Infinity;
+      let water = false, overRoad = false;
+      for (let k = s; k <= e; k++) {
+        maxGround = Math.max(maxGround, groundHeight(g, path[k].x, path[k].z));
+        if (path[k].overRoad) overRoad = true;
+        if (railWaterAt(path[k].x, path[k].z)) water = true;
+      }
+      let level = maxGround + 0.15;
+      if (overRoad) level = Math.max(level, maxGround + 7.5);
+      if (water) level = Math.max(level, WATER_LEVEL + 10);
+      const gi = groups.length;
+      groups.push({ s, e, level });
+      for (let k = s; k <= e; k++) {
+        groupOf[k] = gi;
+        h[k] = level;
+        pinned[k] = 1;
+      }
+      i++;
+    }
+
+    const maxPasses = Math.min(1400, n * 4 + 120);
+    const tol = 1e-6;
+    for (let pass = 0; pass < maxPasses; pass++) {
+      let changed = false;
+      for (let i = 1; i < n; i++) {
+        const step = Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z) *
+          RAIL_MAX_GRADE;
+        const diff = h[i] - h[i - 1];
+        if (Math.abs(diff) <= step + tol) continue;
+        const excess = Math.abs(diff) - step;
+        const sign = diff > 0 ? 1 : -1;
+        if (!pinned[i] && !pinned[i - 1]) {
+          h[i] -= sign * excess * 0.5;
+          h[i - 1] += sign * excess * 0.5;
+        } else if (!pinned[i]) {
+          h[i] -= sign * excess;
+        } else if (!pinned[i - 1]) {
+          h[i - 1] += sign * excess;
+        } else {
+          return false;
+        }
+        if (groupOf[i - 1] >= 0 && h[i - 1] !== groups[groupOf[i - 1]].level) return false;
+        if (groupOf[i] >= 0 && h[i] !== groups[groupOf[i]].level) return false;
+        changed = true;
+      }
+      for (let i = n - 2; i >= 0; i--) {
+        const step = Math.hypot(path[i + 1].x - path[i].x, path[i + 1].z - path[i].z) *
+          RAIL_MAX_GRADE;
+        const diff = h[i] - h[i + 1];
+        if (Math.abs(diff) <= step + tol) continue;
+        const excess = Math.abs(diff) - step;
+        const sign = diff > 0 ? 1 : -1;
+        if (!pinned[i] && !pinned[i + 1]) {
+          h[i] -= sign * excess * 0.5;
+          h[i + 1] += sign * excess * 0.5;
+        } else if (!pinned[i]) {
+          h[i] -= sign * excess;
+        } else if (!pinned[i + 1]) {
+          h[i + 1] += sign * excess;
+        } else {
+          return false;
+        }
+        if (groupOf[i] >= 0 && h[i] !== groups[groupOf[i]].level) return false;
+        if (groupOf[i + 1] >= 0 && h[i + 1] !== groups[groupOf[i + 1]].level) return false;
+        changed = true;
+      }
+      if (!changed) break;
+    }
+
+    let maxGrade = 0;
+    for (let i = 1; i < n; i++) {
+      const d = Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z);
+      const grade = d > 0.01 ? Math.abs(h[i] - h[i - 1]) / d : 0;
+      if (grade > RAIL_MAX_GRADE + 1e-5) return false;
+      maxGrade = Math.max(maxGrade, grade);
+    }
+    for (let gi = 0; gi < groups.length; gi++) {
+      const grp = groups[gi];
+      const v = h[grp.s];
+      for (let k = grp.s; k <= grp.e; k++) if (Math.abs(h[k] - v) > 0.01) return false;
+    }
+    for (let i = 0; i < n; i++) path[i].h = h[i];
+    path.verticalAudit = { maxGrade, stations: [h[0], h[n - 1]] };
+    return true;
+  };
 
   function findRailPath(A, B) {
     const toI = v => Math.min(N - 1, Math.max(0, Math.floor((v + WORLD_HALF) / CELL)));
@@ -1877,7 +2439,9 @@ function genRailways(g, rng) {
     pts[0] = A2;
     pts[pts.length - 1] = B2;
     pts = resamplePath(chaikinPath(pts, 3), 22);
-    const ys = pts.map(p => rawHeight(g, p.x, p.z));
+    pts = relaxRailPath(pts, RAIL_MIN_CURVE_RADIUS);
+    pts = resamplePath(pts, 22);
+    const ys = pts.map(p => groundHeight(g, p.x, p.z));
     for (let pass = 0; pass < 4; pass++) {
       for (let i = 1; i < ys.length - 1; i++) {
         ys[i] = ys[i - 1] * 0.22 + ys[i] * 0.56 + ys[i + 1] * 0.22;
@@ -1886,7 +2450,7 @@ function genRailways(g, rng) {
     const out = [];
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i];
-      const h = rawHeight(g, p.x, p.z);
+      const h = groundHeight(g, p.x, p.z);
       const onRoad = roadAt(g, p.x, p.z) > 0.025;
       const overWater = h < WATER_LEVEL + 2.4;
       out.push({
@@ -1918,20 +2482,15 @@ function genRailways(g, rng) {
       const at = k => out[fromStart ? k : out.length - 1 - k];
       const ux = Math.cos(st.rot), uz = -Math.sin(st.rot);
       const p1 = at(1);
-      let far = Math.min(14, out.length - 2);
-      for (let k = 10; k < Math.min(22, out.length - 1); k++) {
-        const p = at(k);
-        const dx = p.x - p1.x, dz = p.z - p1.z;
-        const d = Math.hypot(dx, dz) || 1;
-        if ((dx * ux + dz * uz) / d > 0.28) { far = k; break; }
-      }
+      /* 站口必须保留连续的切向引线，不能因下一个采样点提前转向而缩短到一两个点。 */
+      const far = Math.max(4, Math.min(16, out.length - 2));
       if (far + 1 >= out.length) return;
       const p0 = at(1), p3 = at(far);
       const pPrev = at(far - 1), pNext = at(far + 1);
       const span = Math.hypot(p3.x - p0.x, p3.z - p0.z) || 1;
       const t1x = (pNext.x - pPrev.x) / (Math.hypot(pNext.x - pPrev.x, pNext.z - pPrev.z) || 1);
       const t1z = (pNext.z - pPrev.z) / (Math.hypot(pNext.x - pPrev.x, pNext.z - pPrev.z) || 1);
-      const c1x = p0.x + ux * span * 0.62, c1z = p0.z + uz * span * 0.62;
+      const c1x = p0.x + ux * span * 0.72, c1z = p0.z + uz * span * 0.72;
       const c2x = p3.x - t1x * span * 0.38, c2z = p3.z - t1z * span * 0.38;
       for (let k = 2; k < far; k++) {
         const t = (k - 1) / (far - 1), u = 1 - t;
@@ -1942,8 +2501,34 @@ function genRailways(g, rng) {
     };
     smoothStationLead(A, true);
     smoothStationLead(B, false);
+    const stationAnchorA = out[0], stationAnchorB = out[out.length - 1];
+    const uniform = resamplePath(out.map(p => ({ x: p.x, z: p.z })), 8);
+    out.length = 0;
+    for (const p of uniform) {
+      out.push({
+        x: p.x, z: p.z, h: groundHeight(g, p.x, p.z) + 0.15,
+        bridge: false, overRoad: false, span: false, ramp: false, anchor: false
+      });
+    }
+    out[0].anchor = true;
+    out[out.length - 1].anchor = true;
+    out[0].h = stationAnchorA.h;
+    out[out.length - 1].h = stationAnchorB.h;
+    relaxRailPath(out, RAIL_MIN_CURVE_RADIUS);
+    const uniform2 = resamplePath(out.map(p => ({ x: p.x, z: p.z })), 22);
+    out.length = 0;
+    for (const p of uniform2) {
+      out.push({
+        x: p.x, z: p.z, h: groundHeight(g, p.x, p.z) + 0.15,
+        bridge: false, overRoad: false, span: false, ramp: false, anchor: false
+      });
+    }
+    out[0].anchor = true;
+    out[out.length - 1].anchor = true;
+    out[0].h = stationAnchorA.h;
+    out[out.length - 1].h = stationAnchorB.h;
     /* 最终线位确定后重算纵断面：先找水 / 路跨越，再生成水平桥跨与限坡引道。 */
-    const baseH = out.map(p => rawHeight(g, p.x, p.z));
+    const baseH = out.map(p => groundHeight(g, p.x, p.z));
     for (let pass = 0; pass < 4; pass++) {
       const cp = baseH.slice();
       for (let i = 1; i < out.length - 1; i++) {
@@ -1965,24 +2550,27 @@ function genRailways(g, rng) {
     }
     for (let i = 0; i < out.length; i++) {
       if (out[i].anchor) continue;
-      out[i].h = Math.max(rawHeight(g, out[i].x, out[i].z) + 0.15, baseH[i], floorH[i]);
+      out[i].h = Math.max(groundHeight(g, out[i].x, out[i].z) + 0.15, baseH[i], floorH[i]);
       out[i].bridge = false;
       out[i].overRoad = false;
       out[i].span = false;
       out[i].ramp = false;
     }
-    for (let i = 1; i < out.length - 1; i++) {
-      if (out[i].anchor) continue;
-      const onRoad = roadAt(g, out[i].x, out[i].z) > 0.025;
-      out[i].overRoad = onRoad;
-      out[i].bridge = onRoad || rawHeight(g, out[i].x, out[i].z) < WATER_LEVEL + 2.4;
-    }
     for (let i = 1; i < out.length; i++) {
       const a = out[i - 1], b = out[i];
       if (Math.hypot(b.x - a.x, b.z - a.z) < 0.01) continue;
-      if (roadAt(g, (a.x + b.x) * 0.5, (a.z + b.z) * 0.5) > 0.012) {
+      let cross = false, overRoad = false;
+      for (let k = 1; k < 10; k++) {
+        const t = k / 10;
+        const x = a.x + (b.x - a.x) * t;
+        const z = a.z + (b.z - a.z) * t;
+        if (roadAt(g, x, z) > 0.012) overRoad = true;
+        if (overRoad || railWaterAt(x, z)) cross = true;
+      }
+      if (cross) {
         a.bridge = b.bridge = true;
-        a.overRoad = b.overRoad = true;
+        a.overRoad = a.overRoad || overRoad;
+        b.overRoad = b.overRoad || overRoad;
       }
     }
     const spans = [];
@@ -2014,11 +2602,11 @@ function genRailways(g, rng) {
       let deckY = WATER_LEVEL + 8;
       for (let k = sp.s; k <= sp.e; k++) {
         if (out[k].overRoad) {
-          deckY = Math.max(deckY, rawHeight(g, out[k].x, out[k].z) + 7.5);
+          deckY = Math.max(deckY, groundHeight(g, out[k].x, out[k].z) + 7.5);
         }
       }
-      const bankL = rawHeight(g, out[Math.max(0, sp.s - 1)].x, out[Math.max(0, sp.s - 1)].z);
-      const bankR = rawHeight(g, out[Math.min(out.length - 1, sp.e + 1)].x, out[Math.min(out.length - 1, sp.e + 1)].z);
+      const bankL = groundHeight(g, out[Math.max(0, sp.s - 1)].x, out[Math.max(0, sp.s - 1)].z);
+      const bankR = groundHeight(g, out[Math.min(out.length - 1, sp.e + 1)].x, out[Math.min(out.length - 1, sp.e + 1)].z);
       deckY = Math.max(deckY, bankL + 0.65, bankR + 0.65, floorH[sp.s], floorH[sp.e]);
       sp.deckY = deckY;
     }
@@ -2120,14 +2708,11 @@ function genRailways(g, rng) {
         if (Math.hypot((mx - ct.x) / ct.rx, (mz - ct.z) / ct.rz) < 1.035) return null;
       }
     }
-    /* 高填方段改为高架：轨面若远高于原地形，不再用 30m 过渡宽度硬筑路堤。 */
+    /* 单点桥标记不会生成桥体，向前后扩展到至少一条桥跨。 */
     for (let i = 1; i < out.length - 1; i++) {
-      if (out[i].anchor) continue;
-      if (out[i].h - rawHeight(g, out[i].x, out[i].z) > 24) {
-        out[i].bridge = true;
-        out[i].span = true;
-        out[i].ramp = false;
-      }
+      if (!out[i].bridge || out[i - 1].bridge || out[i + 1].bridge) continue;
+      if (!out[i + 1].anchor) out[i + 1].bridge = true;
+      else if (!out[i - 1].anchor) out[i - 1].bridge = true;
     }
     /* 同一线路不得近距离回折叠压；否则高度场会收到两套轨面标高。 */
     const segDist = (ax, az, bx, bz, cx, cz) => {
@@ -2149,6 +2734,9 @@ function genRailways(g, rng) {
         if (dist < 30) return null;
       }
     }
+    levelRailBridgeGroups(out);
+    gradeRailBridgeApproaches(out);
+    if (!solveRailVertical(out)) return null;
     return out;
   }
 
@@ -2169,10 +2757,11 @@ function genRailways(g, rng) {
       const samples = [];
       for (let i = 0; i <= 64; i++) {
         const t = i / 64, u = 1 - t;
-        const c1x = A2.x + dx / 3 + nx * bend;
-        const c1z = A2.z + dz / 3 + nz * bend;
-        const c2x = A2.x + dx * 2 / 3 + nx * bend;
-        const c2z = A2.z + dz * 2 / 3 + nz * bend;
+        /* 两端控制点沿站台外向切向延伸，兜底曲线也不能在站口突然折向。 */
+        const c1x = A2.x + aux * len0 * 0.34 + nx * bend * 0.55;
+        const c1z = A2.z + auz * len0 * 0.34 + nz * bend * 0.55;
+        const c2x = B2.x + bux * len0 * 0.34 + nx * bend * 0.55;
+        const c2z = B2.z + buz * len0 * 0.34 + nz * bend * 0.55;
         samples.push({
           x: u*u*u*A2.x + 3*u*u*t*c1x + 3*u*t*t*c2x + t*t*t*B2.x,
           z: u*u*u*A2.z + 3*u*u*t*c1z + 3*u*t*t*c2z + t*t*t*B2.z
@@ -2194,7 +2783,7 @@ function genRailways(g, rng) {
     if (!best) return null;
     const path = [{ x: A.x, z: A.z, h: A.h + 0.1, bridge: false, anchor: true }];
     for (const p of best.samples) {
-      const ground = rawHeight(g, p.x, p.z);
+      const ground = groundHeight(g, p.x, p.z);
       const overRoad = roadAt(g, p.x, p.z) > 0.025;
       const bridge = overRoad || ground < WATER_LEVEL + 2.4;
       const h = bridge
@@ -2203,48 +2792,315 @@ function genRailways(g, rng) {
       path.push({ x: p.x, z: p.z, h, bridge, overRoad, span: false, ramp: false });
     }
     path.push({ x: B.x, z: B.z, h: B.h + 0.1, bridge: false, anchor: true });
-    return { A, B, path, len: best.len };
+    relaxRailPath(path, RAIL_MIN_CURVE_RADIUS);
+    let dense = resamplePath(path.map(p => ({ x: p.x, z: p.z })), 8);
+    relaxRailPath(dense, RAIL_MIN_CURVE_RADIUS);
+    const uniform = resamplePath(dense, 22);
+    const rebuilt = [{ x: A.x, z: A.z, h: A.h + 0.1, bridge: false, anchor: true }];
+    for (let i = 1; i < uniform.length - 1; i++) {
+      const p = uniform[i];
+      const ground = groundHeight(g, p.x, p.z);
+      const overRoad = roadAt(g, p.x, p.z) > 0.025;
+      const bridge = overRoad || railWaterAt(p.x, p.z);
+      const h = bridge
+        ? Math.max(WATER_LEVEL + 10, overRoad ? ground + 7.5 : ground)
+        : ground + 0.15;
+      rebuilt.push({ x: p.x, z: p.z, h, bridge, overRoad, span: false, ramp: false });
+    }
+    rebuilt.push({ x: B.x, z: B.z, h: B.h + 0.1, bridge: false, anchor: true });
+    relaxRailPath(rebuilt, RAIL_MIN_CURVE_RADIUS);
+    levelRailBridgeGroups(rebuilt);
+    gradeRailBridgeApproaches(rebuilt);
+    if (!solveRailVertical(rebuilt)) return null;
+    rebuilt.fallback = true;
+    return { A, B, path: rebuilt, len: best.len };
   };
 
-  const tree = [0];
-  const edges = [];
-  while (tree.length < g.cities.length) {
-    let best = null;
-    for (const i of tree) for (let j = 0; j < g.cities.length; j++) {
-      if (tree.indexOf(j) >= 0) continue;
-      const d = Math.hypot(g.cities[i].x - g.cities[j].x, g.cities[i].z - g.cities[j].z);
-      if (!best || d < best.d) best = { i, j, d };
+  const railPathTurn = path => {
+    let maxCurv = 0, worst = -1;
+    for (let i = 1; i + 1 < path.length; i++) {
+      const ax = path[i].x - path[i - 1].x, az = path[i].z - path[i - 1].z;
+      const bx = path[i + 1].x - path[i].x, bz = path[i + 1].z - path[i].z;
+      const al = Math.hypot(ax, az), bl = Math.hypot(bx, bz);
+      if (al < 1 || bl < 1) continue;
+      const dot = Math.max(-1, Math.min(1, (ax * bx + az * bz) / (al * bl)));
+      const curv = Math.acos(dot) / ((al + bl) * 0.5);
+      if (curv > maxCurv) { maxCurv = curv; worst = i; }
     }
-    tree.push(best.j);
-    edges.push([best.i, best.j]);
-  }
-  for (const [ia, ib] of edges) {
-    const optsA = stationOptions[ia] || [];
-    const optsB = stationOptions[ib] || [];
+    return { maxCurv, radius: maxCurv > 1e-9 ? 1 / maxCurv : Infinity, worst };
+  };
+  const endpointsFacing = (st, toward) => {
+    const ux = Math.cos(st.rot), uz = -Math.sin(st.rot);
+    const pref = ux * (toward.x - st.x) + uz * (toward.z - st.z) >= 0 ? 1 : -1;
+    return [pref, -pref].map(sign => {
+      const dx = ux * sign, dz = uz * sign;
+      return Object.assign({}, st, {
+        x: st.x + dx * (st.len * 0.46),
+        z: st.z + dz * (st.len * 0.46),
+        rot: sign > 0 ? st.rot : st.rot + Math.PI,
+        len: 70, endpoint: true, station: st
+      });
+    });
+  };
+
+  const routeStations = (stationA, stationB) => {
+    const endsA = endpointsFacing(stationA, stationB);
+    const endsB = endpointsFacing(stationB, stationA);
     let best = null;
-    for (const A of optsA) {
-      for (const B of optsB) {
-        const path = findRailPath(A, B);
+    for (const A of endsA) {
+      for (const B of endsB) {
+        let path = findRailPath(A, B);
+        let isFallback = false;
+        if (!path) {
+          const fallback = makeFallbackRailPath(A, B);
+          if (fallback) {
+            path = fallback.path;
+            isFallback = true;
+          }
+        }
         if (!path || path.length < 3) continue;
+        path[0].h = A.h + 0.1;
+        path[path.length - 1].h = B.h + 0.1;
+        if (!solveRailVertical(path)) continue;
+        const curve = railPathTurn(path);
+        if (curve.radius < RAIL_MIN_CURVE_RADIUS - 1) continue;
         let len = 0;
         for (let i = 1; i < path.length; i++) {
           len += Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z);
         }
-        const endA = path[1].h, endB = path[path.length - 2].h;
-        const stationPenalty = Math.abs(endA - A.h) + Math.abs(endB - B.h);
-        const score = len + stationPenalty * 12;
-        if (!best || score < best.score) best = { A, B, path, len, endA, endB, score };
+        path[0].stationEnd = true;
+        path[path.length - 1].stationEnd = true;
+        const score = len + (isFallback ? 8000 : 0);
+        if (!best || score < best.score) best = { path, len, curve, score };
       }
     }
-    if (!best) best = makeFallbackRailPath(optsA[0], optsB[0]);
-    if (!best) continue;
-    /* 车站保持在地面，不把极端高架标高反向灌进站台地形。 */
-    best.path[0].h = best.A.h + 0.1;
-    best.path[best.path.length - 1].h = best.B.h + 0.1;
-    g.railStations = g.railStations.filter(s => s.cityIndex !== ia && s.cityIndex !== ib);
-    g.railStations.push(best.A, best.B);
-    g.railways.push(best.path);
+    return best;
+  };
+
+  const routeCache = edges.map(() => new Map());
+  const getRoute = (ei, oa, ob) => {
+    const key = oa + ':' + ob;
+    const cache = routeCache[ei];
+    if (cache.has(key)) return cache.get(key);
+    const [ia, ib] = edges[ei];
+    const A = stationOptions[ia] && stationOptions[ia][oa];
+    const B = stationOptions[ib] && stationOptions[ib][ob];
+    const route = A && B ? routeStations(A, B) : null;
+    cache.set(key, route);
+    return route;
+  };
+
+  const adj = g.cities.map(() => []);
+  edges.forEach(([ia, ib], ei) => {
+    adj[ia].push({ v: ib, ei });
+    adj[ib].push({ v: ia, ei });
+  });
+  const children = g.cities.map(() => []);
+  const buildTree = (u, p) => {
+    for (const e of adj[u]) {
+      if (e.v === p) continue;
+      children[u].push(e);
+      buildTree(e.v, u);
+    }
+  };
+  buildTree(0, -1);
+
+  const dp = g.cities.map(() => []);
+  const childPick = g.cities.map(() => []);
+  const better = (a, b) => !b || a.edges > b.edges || (a.edges === b.edges && a.cost < b.cost);
+  const solveSubtree = u => {
+    for (const e of children[u]) solveSubtree(e.v);
+    const optsU = stationOptions[u] || [];
+    dp[u] = optsU.map(() => ({ edges: 0, cost: 0 }));
+    childPick[u] = optsU.map(() => []);
+    for (let ou = 0; ou < optsU.length; ou++) {
+      const total = { edges: 0, cost: 0 };
+      const picks = [];
+      for (const e of children[u]) {
+        const [ia, ib] = edges[e.ei];
+        const optsV = stationOptions[e.v] || [];
+        let connected = null, disconnected = null;
+        for (let ov = 0; ov < optsV.length; ov++) {
+          const childState = dp[e.v][ov];
+          if (!childState) continue;
+          if (better(childState, disconnected)) disconnected = childState;
+          const oa = ia === u ? ou : ov;
+          const ob = ia === u ? ov : ou;
+          const route = getRoute(e.ei, oa, ob);
+          if (!route) continue;
+          const state = {
+            edges: childState.edges + 1,
+            cost: childState.cost + route.score,
+            ov
+          };
+          if (better(state, connected)) connected = state;
+        }
+        if (connected && better(connected, disconnected)) {
+          total.edges += connected.edges;
+          total.cost += connected.cost;
+          picks.push({ connect: true, ov: connected.ov });
+        } else {
+          const bestOv = optsV.reduce((bi, _, oi) =>
+            bi < 0 || better(dp[e.v][oi], dp[e.v][bi]) ? oi : bi, -1);
+          if (bestOv < 0) continue;
+          total.edges += dp[e.v][bestOv].edges;
+          total.cost += dp[e.v][bestOv].cost;
+          picks.push({ connect: false, ov: bestOv });
+        }
+      }
+      dp[u][ou] = total;
+      childPick[u][ou] = picks;
+    }
+  };
+  solveSubtree(0);
+
+  let rootOption = -1, rootState = null;
+  for (let oi = 0; oi < dp[0].length; oi++) {
+    if (better(dp[0][oi], rootState)) { rootState = dp[0][oi]; rootOption = oi; }
   }
+  if (rootOption < 0 || !rootState) {
+    g.railTopologyAudit = { stationCount: 0, cityCount: g.cities.length, edgeCount: edges.length, infeasible: true };
+    return;
+  }
+
+  const chosen = new Array(g.cities.length).fill(-1);
+  const usedEdges = new Set();
+  const assign = (u, ou) => {
+    chosen[u] = ou;
+    for (let i = 0; i < children[u].length; i++) {
+      const pick = childPick[u][ou][i];
+      assign(children[u][i].v, pick.ov);
+      if (pick.connect) usedEdges.add(children[u][i].ei);
+    }
+  };
+  assign(0, rootOption);
+  const finalStations = chosen.map((oi, ci) => stationOptions[ci][oi] || null);
+  for (let ei = 0; ei < edges.length; ei++) {
+    if (!usedEdges.has(ei)) continue;
+    const [ia, ib] = edges[ei];
+    const oa = chosen[ia], ob = chosen[ib];
+    const route = getRoute(ei, oa, ob);
+    if (route) g.railways.push(route.path);
+  }
+
+  /* MST 边若受地形限制，允许用完整城市图上的可行连接补齐连通分量。 */
+  const dsu = g.cities.map((_, i) => i);
+  const findDsu = i => dsu[i] === i ? i : (dsu[i] = findDsu(dsu[i]));
+  const unionDsu = (a, b) => {
+    const ra = findDsu(a), rb = findDsu(b);
+    if (ra !== rb) dsu[rb] = ra;
+  };
+  for (const ei of usedEdges) unionDsu(edges[ei][0], edges[ei][1]);
+  const extraCache = new Map();
+  let extraConnections = 0;
+  for (;;) {
+    const comps = new Map();
+    for (let i = 0; i < g.cities.length; i++) {
+      if (chosen[i] < 0) continue;
+      const r = findDsu(i);
+      if (!comps.has(r)) comps.set(r, []);
+      comps.get(r).push(i);
+    }
+    if (comps.size <= 1) break;
+    let bestLink = null;
+    const roots = Array.from(comps.keys());
+    for (let a = 0; a < roots.length; a++) {
+      for (let b = a + 1; b < roots.length; b++) {
+        for (const u of comps.get(roots[a])) {
+          for (const v of comps.get(roots[b])) {
+            const lo = Math.min(u, v), hi = Math.max(u, v);
+            const key = lo + ':' + hi;
+            let route = extraCache.get(key);
+            if (route === undefined) {
+              route = routeStations(stationOptions[lo][chosen[lo]],
+                stationOptions[hi][chosen[hi]]);
+              extraCache.set(key, route);
+            }
+            if (route && (!bestLink || route.score < bestLink.route.score)) {
+              bestLink = { u: lo, v: hi, route };
+            }
+          }
+        }
+      }
+    }
+    if (!bestLink) break;
+    g.railways.push(bestLink.route.path);
+    unionDsu(bestLink.u, bestLink.v);
+    extraConnections++;
+  }
+
+  /* 最后一层保底：孤立城市沿通往最近铁路城市的出口新建车站，绝不留下无铁路城市。 */
+  let emergencyConnections = 0;
+  for (let ci = 0; ci < g.cities.length; ci++) {
+    if (chosen[ci] < 0) continue;
+    const root = findDsu(ci);
+    let isolated = true;
+    for (let j = 0; j < g.cities.length; j++) {
+      if (j !== ci && findDsu(j) === root) { isolated = false; break; }
+    }
+    if (!isolated) continue;
+    const ct = g.cities[ci];
+    const targets = g.cities.map((c, i) => ({ c, i }))
+      .filter(o => o.i !== ci && chosen[o.i] >= 0 && finalStations[o.i])
+      .sort((a, b) => Math.hypot(a.c.x - ct.x, a.c.z - ct.z) -
+        Math.hypot(b.c.x - ct.x, b.c.z - ct.z));
+    let linked = false;
+    for (const target of targets) {
+      const baseAng = Math.atan2(target.c.z - ct.z, target.c.x - ct.x);
+      for (const off of [0, 0.22, -0.22, 0.42, -0.42]) {
+        const ang = baseAng + off;
+        const c = Math.cos(ang), s = Math.sin(ang);
+        const boundary = 1 / Math.sqrt((c / ct.rx) ** 2 + (s / ct.rz) ** 2);
+        const dist = boundary * 1.10 + 96;
+        const x = ct.x + c * dist, z = ct.z + s * dist;
+        if (stationWaterAt(x, z) || roadAt(g, x, z) > 0.025) continue;
+        const st = {
+          x, z, rot: -ang, h: groundHeight(g, x, z),
+          len: 138, wid: 58, cityIndex: ci, targetIndex: target.i,
+          r: 80, emergency: true, clearEnds: stationClearEnds(x, z, -ang, 138)
+        };
+        const route = routeStations(st, finalStations[target.i]);
+        if (!route) continue;
+        g.railways.push(route.path);
+        finalStations[ci] = st;
+        unionDsu(ci, target.i);
+        emergencyConnections++;
+        linked = true;
+        break;
+      }
+      if (linked) break;
+    }
+  }
+  g.railStations = finalStations.filter(Boolean);
+  const servedCities = new Set(g.railStations.map(st => st.cityIndex));
+  const componentSizes = new Map();
+  for (let i = 0; i < g.cities.length; i++) {
+    const root = findDsu(i);
+    componentSizes.set(root, (componentSizes.get(root) || 0) + 1);
+  }
+  const connectedCities = componentSizes.size
+    ? Math.max(...componentSizes.values()) : 0;
+  g.railTopologyAudit = {
+    stationCount: g.railStations.length,
+    cityCount: g.cities.length,
+    edgeCount: edges.length,
+    connectedEdges: usedEdges.size,
+    disconnectedEdges: edges.length - usedEdges.size,
+    reconstructedLinks: g.railways.length,
+    extraConnections,
+    emergencyConnections,
+    servedCities: servedCities.size,
+    connectedCities,
+    unservedCities: g.cities.length - servedCities.size,
+    networkComponents: componentSizes.size,
+    routeFeasibility: edges.map((e, ei) => {
+      let ok = 0, total = 0;
+      for (const v of routeCache[ei].values()) { total++; if (v) ok++; }
+      return { a: e[0], b: e[1], ok, total };
+    }),
+    minCurveRadius: RAIL_MIN_CURVE_RADIUS,
+    pathCurves: g.railways.map(line => railPathTurn(line).radius)
+  };
 }
 
 /* ---- 二维 OBB 工具：地块之间 / 地块与村庄圆盘 / 点到圆盘 的互斥判定 ---- */
@@ -2357,7 +3213,7 @@ function fieldSamplesOK(g, f) {
     if (h < WATER_LEVEL + 2.5) return false;
     if (roadAt(g, x, z) > 0.04) return false;
     if (railNear(g, x, z, 24)) return false;
-    if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 460) return false;
+    if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 260) return false;
     if (h < mn) mn = h;
     if (h > mx) mx = h;
   }
@@ -2681,28 +3537,28 @@ function genFields(g, rng) {
 /* ---- 树林：多核心生态斑块（不规则的林核 / 林缘 / 空地 / 侵入草甸） ---- */
 function genForests(g, rng) {
   g.forests = [];
-  const count = 8 + ((rng() * 4) | 0);
+  const count = 22 + ((rng() * 10) | 0);
   for (let i = 0; i < count; i++) {
-    for (let t = 0; t < 180; t++) {
-      const a = 410 + rng() * 330, b = 310 + rng() * 280;
+    for (let t = 0; t < 280; t++) {
+      const a = 600 + rng() * 550, b = 450 + rng() * 400;
       const x = (rng() * 2 - 1) * (WORLD_HALF - a - 220);
       const z = (rng() * 2 - 1) * (WORLD_HALF - b - 220);
       const rot = rng() * Math.PI;
       let ok = true;
       for (const ct of g.cities) {
-        if (Math.hypot(x - ct.x, z - ct.z) < ct.rx * 0.92 + a * 0.72) { ok = false; break; }
+        if (Math.hypot(x - ct.x, z - ct.z) < ct.rx * 0.82 + a * 0.58) { ok = false; break; }
       }
       if (ok) for (const v of g.villages) {
-        if (Math.hypot(x - v.x, z - v.z) < v.r + a * 0.68) { ok = false; break; }
+        if (Math.hypot(x - v.x, z - v.z) < v.r + a * 0.56) { ok = false; break; }
       }
       if (ok) for (const fs of (g.farmsteads || [])) {
-        if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.8 + a * 0.28) { ok = false; break; }
+        if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.8 + a * 0.22) { ok = false; break; }
       }
       if (ok) for (const f of g.forests) {
-        if (Math.hypot(x - f.x, z - f.z) < (a + f.a) * 0.68) { ok = false; break; }
+        if (Math.hypot(x - f.x, z - f.z) < (a + f.a) * 0.46) { ok = false; break; }
       }
       if (!ok) continue;
-      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 760) continue;
+      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 460) continue;
       const h0 = rawHeight(g, x, z);
       if (h0 < WATER_LEVEL + 8 || h0 > 360) continue;
       if (railNear(g, x, z, a * 0.16 + 30)) continue;
@@ -2712,7 +3568,7 @@ function genForests(g, rng) {
         rx: a * (0.42 + rng() * 0.12), rz: b * (0.38 + rng() * 0.12),
         rot: (rng() - 0.5) * 0.5, w: 1.05 + rng() * 0.22
       }];
-      const lobeCount = 5 + ((rng() * 5) | 0);
+      const lobeCount = 7 + ((rng() * 6) | 0);
       for (let k = 0; k < lobeCount; k++) {
         const ang = rng() * 6.2832;
         const rr = Math.sqrt(rng()) * 0.92;
@@ -2726,7 +3582,7 @@ function genForests(g, rng) {
         });
       }
       const clearings = [];
-      const clearingCount = 2 + ((rng() * 4) | 0);
+      const clearingCount = 3 + ((rng() * 5) | 0);
       for (let k = 0; k < clearingCount; k++) {
         clearings.push({
           x: (rng() - 0.5) * a * 1.05,
@@ -2745,13 +3601,16 @@ function genForests(g, rng) {
     }
   }
   /* 少量林间小树丛，让林地之外也有自然过渡。 */
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 18; i++) {
     const x = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const z = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const h0 = rawHeight(g, x, z);
     if (h0 < WATER_LEVEL + 6 || h0 > 360) continue;
     if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 620) continue;
     let blocked = roadAt(g, x, z) > 0.02 || railNear(g, x, z, 60);
+    if (!blocked) for (const ct of g.cities) {
+      if (Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz) < 1.12) { blocked = true; break; }
+    }
     if (!blocked) for (const v of g.villages) {
       if (Math.hypot(x - v.x, z - v.z) < v.r * 1.15) { blocked = true; break; }
     }
@@ -2759,7 +3618,7 @@ function genForests(g, rng) {
       if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.4) { blocked = true; break; }
     }
     if (blocked) continue;
-    const r = 80 + rng() * 110;
+    const r = 95 + rng() * 150;
     g.forests.push({
       x, z, a: r * 1.35, b: r, rot: rng() * Math.PI,
       cr: 1, sr: 0, seed: (g.seed ^ (0x71A2 + i * 3413)) >>> 0,
@@ -2840,7 +3699,7 @@ function genMeadows(g, rng) {
       const a = 380 + rng() * 300, b = 300 + rng() * 250;
       const x = (rng() * 2 - 1) * (WORLD_HALF - a - 180);
       const z = (rng() * 2 - 1) * (WORLD_HALF - b - 180);
-      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 680) continue;
+      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 340) continue;
       const h0 = rawHeight(g, x, z);
       if (h0 < WATER_LEVEL + 6 || h0 > 330) continue;
       if (railNear(g, x, z, 48)) continue;
@@ -3103,7 +3962,7 @@ function rawHeight(g, x, z) {
 
 /* ---- 地形分层：基础地形 → 道路 / 铁路 / 站场 / 农庄压平 ---- */
 function terrainHeightBase(g, x, z) {
-  let h = rawHeight(g, x, z);
+  let h = groundHeight(g, x, z);
   if (g.roadN && g.roadW) {
     const w = sampleRoadField(g, x, z);
     if (w > 0) h = h * (1 - w) + _roadH * w;
@@ -3133,9 +3992,8 @@ function terrainHeightBase(g, x, z) {
   return h;
 }
 
-function sampleTerrainHeightGrid(g, x, z) {
-  const f = g.heightGrid;
-  if (!f) return terrainHeightBase(g, x, z);
+function sampleHeightGrid(f, x, z) {
+  if (!f) return null;
   const fx = (x - f.x0) / f.dx;
   const fz = (z - f.z0) / f.dz;
   const ix = Math.max(0, Math.min(f.n - 2, Math.floor(fx)));
@@ -3148,8 +4006,19 @@ function sampleTerrainHeightGrid(g, x, z) {
   return a + (b - a) * tz;
 }
 
+function sampleTerrainHeightGrid(g, x, z) {
+  if (!g.heightGrid) return terrainHeightBase(g, x, z);
+  return sampleHeightGrid(g.heightGrid, x, z);
+}
+
+/* 道路 / 铁路选线读取已经定稿的基础地形，而不是未平滑的解析原高。 */
+function groundHeight(g, x, z) {
+  if (g.baseHeightGrid) return sampleHeightGrid(g.baseHeightGrid, x, z);
+  return rawHeight(g, x, z);
+}
+
 /* ---- 最终地形烘焙：只削掉陡壁，并让视觉、碰撞和布点读取同一高度场 ---- */
-function bakeTerrainHeightGrid(g) {
+function bakeTerrainHeightGrid(g, asBase) {
   const n = 512;
   const x0 = -WORLD_HALF, z0 = -WORLD_HALF;
   const dx = WORLD_HALF * 2 / (n - 1), dz = dx;
@@ -3236,7 +4105,9 @@ function bakeTerrainHeightGrid(g) {
     buf[iz * n] = data[iz * n];
     buf[iz * n + n - 1] = data[iz * n + n - 1];
   }
-  g.heightGrid = { n, x0, z0, dx, dz, data: buf };
+  const field = { n, x0, z0, dx, dz, data: buf };
+  if (asBase) g.baseHeightGrid = field;
+  else g.heightGrid = field;
 }
 
 /* ---- 对外地形高度：生成阶段读取分层高度，烘焙后统一读取平滑高度场 ---- */
@@ -3360,6 +4231,16 @@ function createTerrain() {
     const h = terrainHeight(x, z);
     pos.setY(i, h);
     terrainColor(h, tmp);
+
+    /* 低地牧草色带：即使不在成片草甸内，也保留柔和的黄绿 / 深绿拼布。 */
+    const grassBand = fbm(x * 0.0038, z * 0.0038, GEN.seed ^ 0x4D2A, 3);
+    const grassW = Math.max(0, Math.min(0.20, (grassBand - 0.46) * 0.62));
+    if (grassW > 0) {
+      const pale = fbm(x * 0.011, z * 0.011, GEN.seed ^ 0x1B63, 2);
+      tmp[0] = tmp[0] * (1 - grassW) + (0.43 + pale * 0.08) * grassW;
+      tmp[1] = tmp[1] * (1 - grassW) + (0.49 + pale * 0.05) * grassW;
+      tmp[2] = tmp[2] * (1 - grassW) + (0.27 + pale * 0.04) * grassW;
+    }
 
     /* 草甸 / 牧场：在连续农田之外用暖绿草色和野花斑块打散纯绿底。 */
     for (const md of (GEN.meadows || [])) {
@@ -3869,7 +4750,7 @@ function removeTreeTargetsByScope(scope) {
 
 function createVegetation() {
   ensureVegAssets();
-  const COUNT = 8200;
+  const COUNT = 9600;
   const rng = mulberry32((GEN.seed ^ 0x7E33) >>> 0);
   const spots = [];
   let tries = 0;
@@ -3878,7 +4759,7 @@ function createVegetation() {
     const x = (rng() * 2 - 1) * (WORLD_HALF - 150);
     const z = (rng() * 2 - 1) * (WORLD_HALF - 150);
     const h = terrainHeight(x, z);
-    if (h < 72 || h > 330) continue;
+    if (h < WATER_LEVEL + 3.5 || h > 330) continue;
     let inCity = false;
     for (const ct of GEN.cities) {
       if (Math.abs(x - ct.x) < ct.rx * 1.2 && Math.abs(z - ct.z) < ct.rz * 1.2) { inCity = true; break; }
@@ -3901,7 +4782,7 @@ function createVegetation() {
     const gx = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const gz = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const gh = terrainHeight(gx, gz);
-    if (gh < 65 || gh > 360 || roadAt(GEN, gx, gz) > 0.03 ||
+    if (gh < WATER_LEVEL + 3.5 || gh > 360 || roadAt(GEN, gx, gz) > 0.03 ||
         insideVillage(gx, gz, 1.2) || insideFarmstead(gx, gz, 1.7) ||
         insideField(gx, gz, 1.15)) continue;
     let inCity = false;
@@ -5220,7 +6101,7 @@ function createRoadsideInfrastructure() {
       if (lastPole >= 0) wireLinks.push({ a: lastPole, b: pi, sag: 1.25 });
       lastPole = pi;
 
-      if ((i / 6) % 4 === 1) {
+      if ((i / 6) % 3 === 1) {
         const tx = p.x + nx * 35, tz = p.z + nz * 35;
         const th = terrainHeight(tx, tz);
         if (th >= WATER_LEVEL + 2 && !insideField(tx, tz, 1.02) &&
@@ -6219,12 +7100,12 @@ function createFarmland() {
 function createForests() {
   if (!GEN.forests.length) return;
   ensureVegAssets();
-  const MAX = 14500;
+  const MAX = 30000;
   const spots = [];
   const logSpots = [];
   for (const f of GEN.forests) {
     const rng = mulberry32(f.seed);
-    const want = Math.min(2500, Math.round((Math.PI * f.a * f.b) / 86));
+    const want = Math.min(4200, Math.round((Math.PI * f.a * f.b) / 72));
     for (let k = 0; k < want * 5 && spots.length < MAX; k++) {
       const lx = (rng() * 2 - 1) * f.a * 1.15;
       const lz = (rng() * 2 - 1) * f.b * 1.12;
@@ -6237,6 +7118,11 @@ function createForests() {
       const h = terrainHeight(x, z);
       if (h < WATER_LEVEL + 4 || h > 340) continue;
       if (roadAt(GEN, x, z) > 0.08) continue;
+      let inCity = false;
+      for (const ct of GEN.cities) {
+        if (Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz) < 1.12) { inCity = true; break; }
+      }
+      if (inCity) continue;
       if (insideVillage(x, z, 1.12) || insideFarmstead(x, z, 1.7) ||
           insideField(x, z, 1.05) || railNear(GEN, x, z, 24)) continue;
       const moist = fbm(x * 0.0024, z * 0.0024, f.seed ^ 0x61A3, 2);
@@ -6338,7 +7224,7 @@ function createMeadows() {
     const rng = mulberry32(md.seed);
 
     /* 少量树丛 + 孤立树，形成牧场、草甸和牧草地的疏林边界。 */
-    for (let gi = 0, made = 0; gi < 28 && made < 7; gi++) {
+    for (let gi = 0, made = 0; gi < 36 && made < 9; gi++) {
       const x = md.x + (rng() * 2 - 1) * md.a * 0.82;
       const z = md.z + (rng() * 2 - 1) * md.b * 0.82;
       if (meadowCoverage(md, x, z) < 0.18 || !validPoint(x, z)) continue;
@@ -6356,7 +7242,7 @@ function createMeadows() {
       }
       made++;
     }
-    for (let k = 0, made = 0; k < 42 && made < 18; k++) {
+    for (let k = 0, made = 0; k < 56 && made < 24; k++) {
       const x = md.x + (rng() * 2 - 1) * md.a;
       const z = md.z + (rng() * 2 - 1) * md.b;
       if (meadowCoverage(md, x, z) < 0.16 || !validPoint(x, z)) continue;
@@ -6368,7 +7254,7 @@ function createMeadows() {
       made++;
     }
 
-    for (let k = 0, made = 0; k < 130 && made < 54; k++) {
+    for (let k = 0, made = 0; k < 165 && made < 70; k++) {
       const x = md.x + (rng() * 2 - 1) * md.a;
       const z = md.z + (rng() * 2 - 1) * md.b;
       if (meadowCoverage(md, x, z) < 0.10 || !validPoint(x, z)) continue;
@@ -6379,7 +7265,7 @@ function createMeadows() {
       made++;
     }
 
-    for (let k = 0, made = 0; k < 32 && made < 6; k++) {
+    for (let k = 0, made = 0; k < 40 && made < 8; k++) {
       const x = md.x + (rng() * 2 - 1) * md.a * 0.68;
       const z = md.z + (rng() * 2 - 1) * md.b * 0.68;
       if (meadowCoverage(md, x, z) < 0.24 || !validPoint(x, z)) continue;
@@ -7595,8 +8481,760 @@ function createPlane() {
   g.add(flame);
 
   g.userData.flame = flame;
+  g.userData.flameAnchorZ = 5.95;
+  g.userData.flameBaseLength = 2.8;
   g.scale.setScalar(1.55);
   return g;
+}
+
+/* 水平翼面：用带厚度的多边形挤出，保留歼-10 三角翼与鸭翼的平面轮廓。 */
+function makeFighterWing(points, thickness, mat) {
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+  shape.closePath();
+  const bevel = Math.min(0.035, thickness * 0.18);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: thickness, bevelEnabled: true, curveSegments: 1,
+    bevelSegments: 1, bevelSize: bevel, bevelThickness: bevel * 0.7
+  });
+  geo.rotateX(Math.PI / 2);
+  geo.translate(0, thickness / 2, 0);
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, mat);
+}
+
+/* 垂直翼面：points 使用 [z, y]，围绕机身中线挤出。 */
+function makeFighterFin(points, thickness, mat) {
+  const shape = new THREE.Shape();
+  shape.moveTo(-points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) shape.lineTo(-points[i][0], points[i][1]);
+  shape.closePath();
+  const bevel = Math.min(0.025, thickness * 0.16);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: thickness, bevelEnabled: true, curveSegments: 1,
+    bevelSegments: 1, bevelSize: bevel, bevelThickness: bevel * 0.65
+  });
+  geo.rotateY(Math.PI / 2);
+  geo.translate(-thickness / 2, 0, 0);
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, mat);
+}
+
+/* 沿翼面前缘增加窄条，强调鸭翼 / 三角翼的轮廓，不另引入贴图。 */
+function addWingEdge(group, x0, z0, x1, z1, y, mat, thickness) {
+  const dx = x1 - x0, dz = z1 - z0;
+  const edge = new THREE.Mesh(
+    new THREE.BoxGeometry(Math.hypot(dx, dz), thickness || 0.045, 0.075),
+    mat
+  );
+  edge.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+  edge.rotation.y = -Math.atan2(dz, dx);
+  group.add(edge);
+  return edge;
+}
+
+function makeWingStar(size, mat) {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const r = i % 2 === 0 ? size : size * 0.42;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.material.side = THREE.DoubleSide;
+  return mesh;
+}
+
+/* 霹雳导弹模型：青灰弹体、浅色雷达罩、尾焰；机头朝 -Z。 */
+function makePLMissileMesh(showFlame) {
+  const g = new THREE.Group();
+  const matBody = new THREE.MeshLambertMaterial({ color: 0x5ebfc7 });
+  const matBand = new THREE.MeshLambertMaterial({ color: 0xd9e4e5 });
+  const matDark = new THREE.MeshLambertMaterial({ color: 0x3b5055 });
+
+  const bodyGeo = new THREE.CylinderGeometry(0.20, 0.20, 2.45, 10);
+  bodyGeo.rotateX(Math.PI / 2);
+  g.add(new THREE.Mesh(bodyGeo, matBody));
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.82, 10), matBand);
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.z = -1.63;
+  g.add(nose);
+
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.215, 0.215, 0.22, 10), matBand);
+  band.rotation.x = Math.PI / 2;
+  band.position.z = -0.66;
+  g.add(band);
+
+  const finGeo = new THREE.BoxGeometry(0.055, 0.46, 0.58);
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2;
+    const fin = new THREE.Mesh(finGeo, matDark);
+    fin.position.set(Math.cos(a) * 0.27, Math.sin(a) * 0.27, 0.98);
+    fin.rotation.z = a;
+    g.add(fin);
+  }
+
+  const flameOuter = new THREE.Mesh(
+    new THREE.ConeGeometry(0.34, 2.15, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0x4fe4ff, transparent: true, opacity: 0.56,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  flameOuter.rotation.x = Math.PI / 2;
+  flameOuter.position.z = 2.15;
+  flameOuter.visible = !!showFlame;
+  g.add(flameOuter);
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.17, 1.25, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xf2ffff, transparent: true, opacity: 0.96,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  flame.rotation.x = Math.PI / 2;
+  flame.position.z = 1.78;
+  flame.visible = !!showFlame;
+  g.add(flame);
+
+  const flameGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.30, 10, 8),
+    new THREE.MeshBasicMaterial({
+      color: 0x8cefff, transparent: true, opacity: 0.82,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  flameGlow.position.z = 1.34;
+  flameGlow.visible = !!showFlame;
+  g.add(flameGlow);
+  g.userData.flame = flame;
+  g.userData.flameOuter = flameOuter;
+  g.userData.flameGlow = flameGlow;
+  return g;
+}
+
+const PL_TRAIL_SAMPLES = 64;
+const PL_TRAIL_INTERVAL = 0.012;
+const _plTrailHead = new THREE.Vector3();
+const _plTrailTangent = new THREE.Vector3();
+const _plTrailView = new THREE.Vector3();
+const _plTrailSide = new THREE.Vector3();
+
+function makePLTrailLayer(headColor, tailColor, widthHead, widthTail, opacity) {
+  const count = PL_TRAIL_SAMPLES * 2;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const indices = new Uint16Array((PL_TRAIL_SAMPLES - 1) * 6);
+
+  for (let i = 0; i < PL_TRAIL_SAMPLES; i++) {
+    const t = i / (PL_TRAIL_SAMPLES - 1);
+    const fade = Math.pow(1 - t, 1.28);
+    for (let side = 0; side < 2; side++) {
+      const vi = (i * 2 + side) * 3;
+      colors[vi]     = tailColor[0] + (headColor[0] - tailColor[0]) * fade;
+      colors[vi + 1] = tailColor[1] + (headColor[1] - tailColor[1]) * fade;
+      colors[vi + 2] = tailColor[2] + (headColor[2] - tailColor[2]) * fade;
+    }
+    if (i < PL_TRAIL_SAMPLES - 1) {
+      const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+      const ii = i * 6;
+      indices[ii] = a; indices[ii + 1] = b; indices[ii + 2] = c;
+      indices[ii + 3] = b; indices[ii + 4] = d; indices[ii + 5] = c;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  const posAttr = new THREE.BufferAttribute(positions, 3);
+  const colAttr = new THREE.BufferAttribute(colors, 3);
+  if (THREE.DynamicDrawUsage !== undefined) posAttr.setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('position', posAttr);
+  geometry.setAttribute('color', colAttr);
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+  const material = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 3;
+  scene.add(mesh);
+  return {
+    mesh, positions, posAttr, material, baseOpacity: opacity,
+    widthHead, widthTail
+  };
+}
+
+function createPLTrailFx() {
+  return {
+    ready: false,
+    sampleTimer: 0,
+    phase: Math.random() * Math.PI * 2,
+    points: Array.from({ length: PL_TRAIL_SAMPLES }, () => new THREE.Vector3()),
+    layers: [
+      makePLTrailLayer([0.08, 0.86, 1.00], [0.00, 0.015, 0.055], 2.05, 0.05, 0.68),
+      makePLTrailLayer([0.96, 1.00, 1.00], [0.02, 0.18, 0.42], 0.58, 0.012, 0.96)
+    ]
+  };
+}
+
+function disposePLTrailFx(fx) {
+  if (!fx) return;
+  for (const layer of fx.layers) {
+    scene.remove(layer.mesh);
+    layer.mesh.geometry.dispose();
+    layer.material.dispose();
+  }
+  fx.layers.length = 0;
+}
+
+function updatePLTrailFx(ms, dt) {
+  const fx = ms.trailFx;
+  if (!fx) return;
+  const points = fx.points;
+  _plTrailHead.copy(ms.mesh.position).addScaledVector(ms.dir, -1.52);
+
+  if (!fx.ready) {
+    for (const p of points) p.copy(_plTrailHead);
+    fx.ready = true;
+  } else {
+    fx.sampleTimer += dt;
+    if (fx.sampleTimer >= PL_TRAIL_INTERVAL) {
+      for (let i = points.length - 1; i > 0; i--) points[i].copy(points[i - 1]);
+      fx.sampleTimer = 0;
+    }
+    points[0].copy(_plTrailHead);
+  }
+
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const ahead = i === 0 ? p : points[i - 1];
+    const behind = i === points.length - 1 ? p : points[i + 1];
+    _plTrailTangent.subVectors(ahead, behind);
+    if (_plTrailTangent.lengthSq() < 1e-7) _plTrailTangent.copy(ms.dir);
+    _plTrailView.subVectors(camera.position, p);
+    _plTrailSide.crossVectors(_plTrailTangent, _plTrailView);
+    if (_plTrailSide.lengthSq() < 1e-7) _plTrailSide.set(0, 1, 0);
+    _plTrailSide.normalize();
+
+    const t = i / (points.length - 1);
+    const taper = Math.pow(1 - t, 0.76);
+    const flicker = 0.82 + Math.sin(ms.age * 31 + i * 0.63 + fx.phase) * 0.18;
+    for (const layer of fx.layers) {
+      const width = (layer.widthTail + (layer.widthHead - layer.widthTail) * taper) * flicker;
+      const vi = i * 6;
+      layer.positions[vi]     = p.x - _plTrailSide.x * width;
+      layer.positions[vi + 1] = p.y - _plTrailSide.y * width;
+      layer.positions[vi + 2] = p.z - _plTrailSide.z * width;
+      layer.positions[vi + 3] = p.x + _plTrailSide.x * width;
+      layer.positions[vi + 4] = p.y + _plTrailSide.y * width;
+      layer.positions[vi + 5] = p.z + _plTrailSide.z * width;
+    }
+  }
+
+  const pulse = 0.84 + Math.sin(ms.age * 27 + fx.phase) * 0.16;
+  for (const layer of fx.layers) {
+    layer.posAttr.needsUpdate = true;
+    layer.material.opacity = layer.baseOpacity * pulse;
+  }
+}
+
+function disposePLMissile(ms) {
+  if (!ms) return;
+  disposePLTrailFx(ms.trailFx);
+  scene.remove(ms.mesh);
+  ms.mesh.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+      materials.forEach(material => material.dispose());
+    }
+  });
+}
+
+/* 歼-10：修长渐缩机身、鸭翼 + 三角翼、腹部进气道与四枚翼下霹雳。 */
+function createJ10Plane() {
+  const g = new THREE.Group();
+  const matBody = new THREE.MeshLambertMaterial({ color: 0xa6b1b7 });
+  const matLight = new THREE.MeshLambertMaterial({ color: 0xcbd1d3 });
+  const matPanel = new THREE.MeshLambertMaterial({ color: 0x687981 });
+  const matDark = new THREE.MeshLambertMaterial({ color: 0x39474e });
+  const matIntake = new THREE.MeshLambertMaterial({
+    color: 0x151d21, side: THREE.DoubleSide
+  });
+  const matNozzle = new THREE.MeshPhongMaterial({
+    color: 0x41474a, shininess: 105, specular: 0x8d989b
+  });
+  const matRed = new THREE.MeshLambertMaterial({
+    color: 0xc92b28, side: THREE.DoubleSide
+  });
+  const matGold = new THREE.MeshLambertMaterial({
+    color: 0xe4b640, side: THREE.DoubleSide
+  });
+  const matGlass = new THREE.MeshPhongMaterial({
+    color: 0x1f5068, emissive: 0x07131a, shininess: 185,
+    transparent: true, opacity: 0.88, side: THREE.DoubleSide
+  });
+
+  function makeLoft(sections, segments, material) {
+    const positions = [], indices = [];
+    for (const section of sections) {
+      for (let j = 0; j < segments; j++) {
+        const a = j / segments * Math.PI * 2;
+        const belly = Math.sin(a) < 0 ? 0.88 : 1.03;
+        positions.push(
+          Math.cos(a) * section.w,
+          section.y + Math.sin(a) * section.h * belly,
+          section.z
+        );
+      }
+    }
+    for (let r = 0; r < sections.length - 1; r++) {
+      for (let j = 0; j < segments; j++) {
+        const a = r * segments + j;
+        const b = r * segments + (j + 1) % segments;
+        const c = (r + 1) * segments + j;
+        const d = (r + 1) * segments + (j + 1) % segments;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+    const front = sections[0], back = sections[sections.length - 1];
+    const frontCenter = positions.length / 3;
+    positions.push(0, front.y, front.z);
+    const backCenter = positions.length / 3;
+    positions.push(0, back.y, back.z);
+    const backStart = (sections.length - 1) * segments;
+    for (let j = 0; j < segments; j++) {
+      const next = (j + 1) % segments;
+      indices.push(frontCenter, next, j);
+      indices.push(backCenter, backStart + j, backStart + next);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, material);
+  }
+
+  function makeBoxLoft(sections, material) {
+    const positions = [], indices = [];
+    for (const section of sections) {
+      const halfW = section.w * 0.5;
+      positions.push(
+        -halfW, section.bottom, section.z,
+         halfW, section.bottom, section.z,
+         halfW, section.top,    section.z,
+        -halfW, section.top,    section.z
+      );
+    }
+    for (let r = 0; r < sections.length - 1; r++) {
+      for (let j = 0; j < 4; j++) {
+        const a = r * 4 + j;
+        const b = r * 4 + (j + 1) % 4;
+        const c = (r + 1) * 4 + j;
+        const d = (r + 1) * 4 + (j + 1) % 4;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+    const first = sections[0], last = sections[sections.length - 1];
+    const frontCenter = positions.length / 3;
+    positions.push(0, (first.bottom + first.top) * 0.5, first.z);
+    const backCenter = positions.length / 3;
+    positions.push(0, (last.bottom + last.top) * 0.5, last.z);
+    const backStart = (sections.length - 1) * 4;
+    for (let j = 0; j < 4; j++) {
+      const next = (j + 1) % 4;
+      indices.push(frontCenter, next, j);
+      indices.push(backCenter, backStart + j, backStart + next);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, material);
+  }
+
+  function addRod(parent, a, b, radius, material, sides) {
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const rod = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius, dir.length(), sides || 6),
+      material
+    );
+    rod.position.copy(a).add(b).multiplyScalar(0.5);
+    rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    parent.add(rod);
+    return rod;
+  }
+
+  /* 渐缩升力体机身：从雷达罩根部一路收束到尾喷口，避免圆柱拼接的钝感。 */
+  g.add(makeLoft([
+    { z: -6.25, w: 0.56, h: 0.48, y:  0.02 },
+    { z: -5.35, w: 0.70, h: 0.56, y:  0.05 },
+    { z: -4.15, w: 0.83, h: 0.64, y:  0.06 },
+    { z: -2.75, w: 0.95, h: 0.72, y:  0.04 },
+    { z: -0.80, w: 1.02, h: 0.76, y:  0.00 },
+    { z:  1.30, w: 1.00, h: 0.72, y:  0.00 },
+    { z:  3.30, w: 0.92, h: 0.65, y:  0.02 },
+    { z:  5.15, w: 0.78, h: 0.58, y:  0.02 },
+    { z:  6.65, w: 0.68, h: 0.52, y:  0.02 }
+  ], 14, matBody));
+
+  /* 长雷达罩、深色鼻锥帽与空速管。 */
+  const radome = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06, 0.56, 3.15, 24),
+    matPanel
+  );
+  radome.rotation.x = -Math.PI / 2;
+  radome.position.z = -7.825;
+  g.add(radome);
+  const noseCap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.015, 0.08, 0.42, 16),
+    matDark
+  );
+  noseCap.rotation.x = -Math.PI / 2;
+  noseCap.position.z = -9.19;
+  g.add(noseCap);
+  const pitot = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1.05, 6), matDark);
+  pitot.rotation.x = Math.PI / 2;
+  pitot.position.z = -9.88;
+  g.add(pitot);
+  const radomeSeam = new THREE.Mesh(new THREE.TorusGeometry(0.555, 0.018, 6, 24), matPanel);
+  radomeSeam.scale.y = 0.87;
+  radomeSeam.position.z = -6.24;
+  g.add(radomeSeam);
+
+  for (const sx of [-1, 1]) {
+    const sensor = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.12, 0.58), matPanel);
+    sensor.position.set(sx * 0.31, -0.43, -8.10);
+    sensor.rotation.x = 0.10;
+    g.add(sensor);
+  }
+
+  /* 腹部二元进气道：梯形唇口、深色内腔与中央分流板。 */
+  const intakeShape = new THREE.Shape();
+  intakeShape.moveTo(-0.88, -0.48);
+  intakeShape.lineTo(0.88, -0.48);
+  intakeShape.lineTo(0.68, 0.44);
+  intakeShape.lineTo(-0.68, 0.44);
+  intakeShape.closePath();
+  const intake = makeBoxLoft([
+    { z: -4.85, w: 1.78, bottom: -0.48, top: 0.44 },
+    { z: -3.55, w: 1.64, bottom: -0.44, top: 0.39 },
+    { z: -2.25, w: 1.36, bottom: -0.36, top: 0.31 },
+    { z: -1.12, w: 0.94, bottom: -0.27, top: 0.24 }
+  ], matBody);
+  intake.position.y = -0.73;
+  g.add(intake);
+
+  const mouthShape = new THREE.Shape();
+  mouthShape.moveTo(-0.74, -0.38);
+  mouthShape.lineTo(0.74, -0.38);
+  mouthShape.lineTo(0.57, 0.33);
+  mouthShape.lineTo(-0.57, 0.33);
+  mouthShape.closePath();
+  const intakeMouth = new THREE.Mesh(new THREE.ShapeGeometry(mouthShape), matIntake);
+  intakeMouth.position.set(0, -0.73, -4.89);
+  g.add(intakeMouth);
+  const splitter = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.07, 0.54), matPanel);
+  splitter.position.set(0, -0.25, -4.58);
+  g.add(splitter);
+
+  /* 鸭翼与主翼都带独立前缘描边，翼根向后一直延伸到垂尾底边中点。 */
+  const canardR = [
+    [0.62, -4.15], [2.72, -2.90], [2.54, -2.38], [0.76, -2.76]
+  ];
+  const canardL = canardR.map(p => [-p[0], p[1]]).reverse();
+  const canardRight = makeFighterWing(canardR, 0.13, matLight);
+  const canardLeft = makeFighterWing(canardL, 0.13, matLight);
+  canardRight.position.y = 0.18;
+  canardLeft.position.y = 0.18;
+  canardRight.rotation.z = 0.075;
+  canardLeft.rotation.z = -0.075;
+  g.add(canardLeft, canardRight);
+  addWingEdge(g, 0.62, -4.15, 2.72, -2.90, 0.265, matPanel, 0.030);
+  addWingEdge(g, -0.62, -4.15, -2.72, -2.90, 0.265, matPanel, 0.030);
+
+  /*
+   * 单侧主翼是严格的 30°-60°-90° 直角三角形：
+   * 中线直角边 7.82，水平直角边 7.82 / √3，斜边即前缘。
+   * 左右镜像合在一起后，才构成以机头方向为顶点的正三角形。
+   */
+  const wingTipX = 7.82 / Math.sqrt(3);
+  const wingR = [
+    [0, -3.15], [wingTipX, 4.67], [0, 4.67]
+  ];
+  const wingL = wingR.map(p => [-p[0], p[1]]).reverse();
+  const wingRight = makeFighterWing(wingR, 0.18, matBody);
+  const wingLeft = makeFighterWing(wingL, 0.18, matBody);
+  wingRight.position.y = -0.08;
+  wingLeft.position.y = -0.08;
+  g.add(wingLeft, wingRight);
+  const visibleWingRootZ = -3.15 + 0.72 / wingTipX * 7.82;
+  addWingEdge(g, 0.72, visibleWingRootZ, wingTipX, 4.67, 0.035, matPanel, 0.035);
+  addWingEdge(g, -0.72, visibleWingRootZ, -wingTipX, 4.67, 0.035, matPanel, 0.035);
+
+  /* 八一式翼面标识：黄边红星 + 左右两段横向红杠，长边与机身轴线垂直。
+     下方标识靠机身，上方标识靠外翼，和参考图的上下表面差异一致。 */
+  for (const sx of [-1, 1]) {
+    for (const side of [1, -1]) {
+      const decalX = sx * (side > 0 ? 2.92 : 1.35);
+      const decalZ = 3.16;
+      const surfaceY = side > 0 ? 0.046 : -0.206;
+      const inkY = surfaceY + side * 0.007;
+
+      const goldStar = makeWingStar(0.40, matGold);
+      goldStar.position.set(decalX, surfaceY, decalZ);
+      g.add(goldStar);
+      const redStar = makeWingStar(0.30, matRed);
+      redStar.position.set(decalX, inkY, decalZ);
+      g.add(redStar);
+
+      for (const barX of [decalX - 0.39, decalX + 0.39]) {
+        const goldBar = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.012, 0.17),
+          matGold
+        );
+        goldBar.position.set(barX, surfaceY, decalZ);
+        g.add(goldBar);
+        const redBar = new THREE.Mesh(
+          new THREE.BoxGeometry(0.20, 0.014, 0.11),
+          matRed
+        );
+        redBar.position.set(barX, inkY, decalZ);
+        g.add(redBar);
+      }
+    }
+
+    const tipRail = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.075, 0.90), matPanel);
+    tipRail.position.set(sx * (wingTipX - 0.06), -0.015, 4.45);
+    g.add(tipRail);
+  }
+
+  /* 低矮气泡座舱、座舱框、后整流罩与机背脊线。 */
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), matGlass);
+  canopy.scale.set(0.64, 0.48, 1.54);
+  canopy.position.set(0, 0.55, -3.58);
+  g.add(canopy);
+  for (const sx of [-1, 1]) {
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, 2.42), matPanel);
+    sill.position.set(sx * 0.56, 0.61, -3.54);
+    g.add(sill);
+  }
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.045, 0.065), matDark);
+  windshield.position.set(0, 0.88, -4.52);
+  g.add(windshield);
+  const headrest = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.30, 0.52), matDark);
+  headrest.position.set(0, 0.75, -2.46);
+  g.add(headrest);
+  const canopyFairing = new THREE.Mesh(new THREE.BoxGeometry(0.70, 0.24, 1.18), matBody);
+  canopyFairing.position.set(0, 0.59, -2.00);
+  g.add(canopyFairing);
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 4.25), matBody);
+  spine.position.set(0, 0.68, 1.02);
+  g.add(spine);
+  const spinePanel = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.025, 3.45), matPanel);
+  spinePanel.position.set(0, 0.755, 1.18);
+  g.add(spinePanel);
+
+  /* 单垂尾底边从 2.92 到 6.42，主翼后缘根部 4.67 精确落在其中点。 */
+  const fin = makeFighterFin([
+    [2.92, 0.44], [6.42, 0.44], [6.04, 3.34], [4.23, 3.34]
+  ], 0.22, matBody);
+  g.add(fin);
+  const rudder = makeFighterFin([
+    [5.68, 0.45], [6.42, 0.45], [6.04, 3.33], [5.62, 3.33]
+  ], 0.245, matPanel);
+  g.add(rudder);
+  addRod(g,
+    new THREE.Vector3(0, 0.47, 2.90),
+    new THREE.Vector3(0, 3.35, 4.22),
+    0.030, matPanel, 6);
+  addRod(g,
+    new THREE.Vector3(0, 3.38, 4.98),
+    new THREE.Vector3(0, 3.94, 4.91),
+    0.018, matDark, 5);
+  const dorsalFairing = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.20, 1.74), matBody);
+  dorsalFairing.position.set(0, 0.58, 2.45);
+  g.add(dorsalFairing);
+
+  for (const sx of [-1, 1]) {
+    const ventral = makeFighterFin([
+      [4.72, -0.26], [6.30, -0.38], [6.28, -1.35], [5.55, -1.08]
+    ], 0.095, matDark);
+    ventral.position.x = sx * 0.60;
+    ventral.rotation.z = sx * 0.19;
+    g.add(ventral);
+  }
+
+  /* 加长尾段、收口喷口环、内喷管与燃气舵花瓣。 */
+  const engineHousing = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.82, 0.68, 1.22, 18),
+    matBody
+  );
+  engineHousing.rotation.x = Math.PI / 2;
+  engineHousing.position.z = 7.12;
+  g.add(engineHousing);
+  const nozzleCollar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.85, 0.85, 0.18, 20),
+    matDark
+  );
+  nozzleCollar.rotation.x = Math.PI / 2;
+  nozzleCollar.position.z = 7.69;
+  g.add(nozzleCollar);
+  const nozzle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.70, 0.84, 0.82, 20, 1, true),
+    matNozzle
+  );
+  nozzle.rotation.x = Math.PI / 2;
+  nozzle.position.z = 8.05;
+  g.add(nozzle);
+  const nozzleRim = new THREE.Mesh(new THREE.TorusGeometry(0.71, 0.045, 6, 26), matDark);
+  nozzleRim.position.z = 8.43;
+  g.add(nozzleRim);
+  const nozzleInner = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.56, 0.56, 0.10, 20),
+    matIntake
+  );
+  nozzleInner.rotation.x = Math.PI / 2;
+  nozzleInner.position.z = 8.45;
+  g.add(nozzleInner);
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * Math.PI * 2;
+    const petal = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.10, 0.56), matDark);
+    petal.position.set(Math.cos(a) * 0.61, Math.sin(a) * 0.61, 8.14);
+    petal.rotation.z = a;
+    g.add(petal);
+  }
+
+  /* 机身面板、进气道侧唇和尾段检修口，用少量几何提升近景精度。 */
+  for (const sx of [-1, 1]) {
+    const sidePanel = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.20, 1.56), matPanel);
+    sidePanel.position.set(sx * 0.93, 0.17, 0.72);
+    g.add(sidePanel);
+    const sideVent = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.055, 0.52), matDark);
+    sideVent.position.set(sx * 0.74, -0.38, 0.40);
+    g.add(sideVent);
+    const rearVent = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.13, 0.55), matPanel);
+    rearVent.position.set(sx * 0.75, 0.12, 4.62);
+    g.add(rearVent);
+  }
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.62, 2.85, 14),
+    new THREE.MeshBasicMaterial({
+      color: 0x71d9c3, transparent: true, opacity: 0.82,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  flame.rotation.x = Math.PI / 2;
+  flame.position.z = 9.875;
+  g.add(flame);
+  g.userData.flame = flame;
+  g.userData.flameAnchorZ = 8.45;
+  g.userData.flameBaseLength = 2.85;
+
+  /* 翼下四枚霹雳：由内至外依次消耗；挂架也随新翼面内收。 */
+  const missileSlots = [];
+  const slotPositions = [
+    [-1.48, -0.49, 0.62], [1.48, -0.49, 0.62],
+    [-2.66, -0.46, 2.12], [2.66, -0.46, 2.12]
+  ];
+  for (const s of slotPositions) {
+    const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.46, 0.66), matPanel);
+    pylon.position.set(s[0], -0.27, s[2]);
+    g.add(pylon);
+
+    const mount = new THREE.Object3D();
+    mount.position.set(s[0], -0.55, s[2]);
+    g.add(mount);
+    const missile = makePLMissileMesh(false);
+    missile.scale.setScalar(1.04);
+    mount.add(missile);
+    missileSlots.push({ mount, missile });
+  }
+
+  g.userData.plMissileSlots = missileSlots;
+  g.scale.setScalar(1.33);
+  return g;
+}
+
+function syncPlayerMissileRack(ammo) {
+  const slots = plane && plane.userData.plMissileSlots;
+  if (!slots) return;
+  for (let i = 0; i < slots.length; i++) slots[i].missile.visible = i < ammo;
+}
+
+/* 键鼠版机体注册表：选择流程与武器逻辑通过字段驱动。 */
+const AIRCRAFT_MODELS = Object.freeze({
+  alpha: Object.freeze({
+    id: 'alpha',
+    index: '01',
+    name: 'α型',
+    code: 'A-01',
+    role: '多用途攻击机',
+    status: '可部署',
+    speed: '标准',
+    agility: '标准',
+    payload: '机炮 · 航弹',
+    hull: '标准',
+    description: '标准多用途配置。',
+    plMissiles: 0,
+    missileCooldown: 0,
+    factory: createPlane
+  }),
+  j10: Object.freeze({
+    id: 'j10',
+    index: '02',
+    name: '歼-10',
+    code: 'J-10C',
+    role: '单发鸭式多用途战斗机',
+    status: '可部署',
+    speed: '标准',
+    agility: '高机动',
+    payload: '机炮 · 霹雳 ×4 · 航弹',
+    hull: '标准',
+    description: '采用鸭翼与三角翼混合布局，翼下挂载四枚霹雳主动雷达导弹。先用 R 锁定敌方单位，再按鼠标右键发射；导弹发射后自动追踪原锁定目标。',
+    plMissiles: 4,
+    missileCooldown: 1.05,
+    factory: createJ10Plane
+  })
+});
+let selectedAircraftId = 'alpha';
+
+function selectedAircraftSpec() {
+  return AIRCRAFT_MODELS[selectedAircraftId] || AIRCRAFT_MODELS.alpha;
+}
+
+function createSelectedAircraft() {
+  const spec = selectedAircraftSpec();
+  return (spec.factory || createPlane)();
+}
+
+function replacePlayerAircraftModel() {
+  if (!plane || !scene) return;
+  const old = plane;
+  const next = createSelectedAircraft();
+  next.position.copy(old.position);
+  next.quaternion.copy(old.quaternion);
+  next.visible = old.visible;
+  scene.remove(old);
+  old.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(mat => mat.dispose());
+    }
+  });
+  plane = next;
+  scene.add(plane);
 }
 
 /* =========================================================
@@ -7909,6 +9547,10 @@ const _u3 = new THREE.Vector3(), _u4 = new THREE.Vector3();
 const _vt = new THREE.Vector3();
 const _w1 = new THREE.Vector3(), _w2 = new THREE.Vector3();
 const _w3 = new THREE.Vector3(), _w4 = new THREE.Vector3();
+const _plPrev = new THREE.Vector3(), _plTarget = new THREE.Vector3();
+const _plVel = new THREE.Vector3(), _plGoal = new THREE.Vector3();
+const _plDir = new THREE.Vector3();
+const _plExhaustPos = new THREE.Vector3();
 
 /* 共享材质 */
 const M_A_BASE  = new THREE.MeshLambertMaterial({ color: 0x4f5a45 });
@@ -8598,6 +10240,126 @@ function segDist(p0, p1, q) {
   return Math.sqrt(cx * cx + cy * cy + cz * cz);
 }
 
+function plTargetPoint(ms, out) {
+  if (!ms.target || ms.target.dead) return false;
+  out.copy(ms.target.mesh.position);
+  out.y += ms.targetUp || 0;
+  return true;
+}
+
+function hitPLTarget(ms) {
+  const target = ms.target;
+  if (!target || target.dead) return false;
+  if (ms.kind === 'enemy') destroyEnemy(target, true);
+  else if (ms.kind === 'aaa') destroyAAA(target);
+  else if (ms.kind === 'sam') destroySAM(target);
+  else return false;
+  return true;
+}
+
+/* 玩家主动弹：初速较低，随后加速；按目标速度做一次拦截点预判并限制转向率。 */
+function updatePlayerMissiles(dt) {
+  for (let i = playerMissiles.length - 1; i >= 0; i--) {
+    const ms = playerMissiles[i];
+    ms.age += dt;
+    ms.spd = Math.min(PL_SPEED_MAX, ms.spd + PL_ACCEL * dt);
+    _plPrev.copy(ms.mesh.position);
+
+    if (plTargetPoint(ms, _plTarget)) {
+      ms.lost = 0;
+      _plVel.set(0, 0, 0);
+      if (ms.kind === 'enemy' && ms.target.fwd) {
+        _plVel.copy(ms.target.fwd).multiplyScalar(ms.target.spd || 0);
+      }
+
+      /* 一段式拦截预判：高速目标继续前进时，导弹朝提前量交汇。 */
+      let lead = _plPrev.distanceTo(_plTarget) / Math.max(PL_SPEED_MIN, ms.spd);
+      lead = Math.max(0, Math.min(1.25, lead));
+      _plGoal.copy(_plTarget).addScaledVector(_plVel, lead);
+      _plDir.subVectors(_plGoal, _plPrev);
+      if (_plDir.lengthSq() > 1e-6) {
+        _plDir.normalize();
+        const ang = ms.dir.angleTo(_plDir);
+        if (ang > 1e-5) {
+          const t = Math.min(1, (PL_TURN_RATE * dt) / ang);
+          ms.dir.multiplyScalar(1 - t).addScaledVector(_plDir, t).normalize();
+        }
+      }
+    } else {
+      ms.lost += dt;
+    }
+
+    ms.mesh.position.addScaledVector(ms.dir, ms.spd * dt);
+    orientToward(ms.mesh, ms.dir, 0);
+
+    const flame = ms.mesh.userData.flame;
+    const flameOuter = ms.mesh.userData.flameOuter;
+    const flameGlow = ms.mesh.userData.flameGlow;
+    if (flame) {
+      const pulse = 0.86 + Math.random() * 0.32;
+      flame.scale.set(pulse, 0.92 + Math.random() * 0.62, pulse);
+      flame.material.opacity = 0.78 + Math.random() * 0.22;
+    }
+    if (flameOuter) {
+      const pulse = 0.82 + Math.random() * 0.38;
+      flameOuter.scale.set(pulse, 0.88 + Math.random() * 0.72, pulse);
+      flameOuter.material.opacity = 0.42 + Math.random() * 0.25;
+    }
+    if (flameGlow) {
+      const pulse = 0.82 + Math.sin(ms.age * 42) * 0.18 + Math.random() * 0.12;
+      flameGlow.scale.setScalar(pulse);
+      flameGlow.material.opacity = 0.65 + Math.random() * 0.30;
+    }
+    updatePLTrailFx(ms, dt);
+
+    ms.trail -= dt;
+    if (ms.trail <= 0) {
+      ms.trail = 0.034 + Math.random() * 0.012;
+      _plExhaustPos.copy(ms.mesh.position).addScaledVector(ms.dir, -1.75);
+      const speedMix = Math.max(0, Math.min(1,
+        (ms.spd - PL_SPEED_MIN) / (PL_SPEED_MAX - PL_SPEED_MIN)));
+      spawnPLExhaustPuff(_plExhaustPos, 0.95 + speedMix * 0.9, true);
+      if ((ms.trailPuffs++ & 1) === 0) {
+        spawnPLExhaustPuff(_plExhaustPos, 1.65 + speedMix * 1.25, false);
+      }
+    }
+
+    const p = ms.mesh.position;
+    let blow = false;
+    let targetHit = false;
+
+    if (plTargetPoint(ms, _plTarget) &&
+        segDist(_plPrev, p, _plTarget) < PL_HIT_RADIUS) {
+      targetHit = hitPLTarget(ms);
+      if (targetHit) blow = true;
+    }
+
+    if (!targetHit && p.y <= terrainHeight(p.x, p.z) + 1.5) blow = true;
+    if (!targetHit && !blow) {
+      const near = queryBuildings(p.x, p.z, 24);
+      for (let j = 0; j < near.length; j++) {
+        const b = near[j];
+        if (b.dead) continue;
+        if (p.x > b.x - b.hw && p.x < b.x + b.hw &&
+            p.z > b.z - b.hd && p.z < b.z + b.hd &&
+            p.y > b.y0 && p.y < b.y1) {
+          destroyBuilding(b);
+          targetHit = true;       // 建筑爆炸已由 destroyBuilding 处理
+          blow = true;
+          break;
+        }
+      }
+    }
+    if (ms.lost > 0.72 || ms.age > PL_MISSILE_LIFE) blow = true;
+
+    if (blow) {
+      if (!targetHit) explosionAt(p.clone(), 2.4, 1.25);
+      disposePLMissile(ms);
+      playerMissiles.splice(i, 1);
+    }
+  }
+}
+
 /* ---- 威胁物：敌方弹幕与导弹推进 / 命中判定 ---- */
 function updateThreats(dt) {
   const active = G.started && !G.over && !G.crashing;
@@ -9078,6 +10840,30 @@ function spawnSmoke(pos, scale, dark) {
   });
 }
 
+function spawnPLExhaustPuff(pos, scale, hot) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: hot ? 0x8defff : 0x6d7a80,
+    transparent: true,
+    opacity: hot ? 0.78 : 0.34,
+    blending: hot ? THREE.AdditiveBlending : THREE.NormalBlending,
+    depthWrite: false
+  });
+  const mesh = new THREE.Mesh(SMOKE_GEO, mat);
+  mesh.position.copy(pos);
+  mesh.scale.setScalar(scale);
+  scene.add(mesh);
+  effects.push({
+    type: 'plume', mesh, ownsGeo: false, ownsMat: true,
+    life: 0, dur: hot ? 0.42 : 0.9 + Math.random() * 0.35,
+    base: scale, opacity: mat.opacity,
+    vel: new THREE.Vector3(
+      (Math.random() - 0.5) * (hot ? 9 : 14),
+      (hot ? 3 : 6) + Math.random() * 8,
+      (Math.random() - 0.5) * (hot ? 9 : 14)
+    )
+  });
+}
+
 function spawnExplosion(pos, scale) {
   scale = scale || 1;
 
@@ -9192,6 +10978,13 @@ function updateEffects(dt) {
         e.mesh.material.opacity = 0.5 * Math.pow(1 - t, 1.3);
         break;
       }
+      case 'plume': {
+        e.mesh.position.addScaledVector(e.vel, dt);
+        e.vel.multiplyScalar(1 - dt * 1.25);
+        e.mesh.scale.setScalar(e.base * (0.55 + t * 2.8));
+        e.mesh.material.opacity = e.opacity * Math.pow(1 - t, 1.45);
+        break;
+      }
       case 'debris': {
         e.vel.y -= 58 * dt;
         e.mesh.position.addScaledVector(e.vel, dt);
@@ -9219,6 +11012,15 @@ function updateEffects(dt) {
    键盘 / 鼠标输入
 ========================================================= */
 const KEY_MAP = { KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' };
+let weaponNoticeTimer = 0;
+
+function showWeaponNotice(text, tone) {
+  const el = document.getElementById('weaponWarn');
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'show' + (tone ? ' ' + tone : '');
+  weaponNoticeTimer = 1.5;
+}
 
 function clampViewOffsets() {
   if (camYawOff > Math.PI) camYawOff -= Math.PI * 2;
@@ -9240,16 +11042,128 @@ function setCursorHidden(h) {
   document.body.classList.toggle('hide-cursor', G.cursorHidden);
 }
 
+function aircraftHasPLMissiles() {
+  return (selectedAircraftSpec().plMissiles || 0) > 0;
+}
+
+/* 霹雳主动弹：必须有 R 锁定的敌方目标，发射后锁定发射瞬间的目标引用。 */
+function firePLMissile() {
+  const spec = selectedAircraftSpec();
+  if (!G.started || G.over || G.crashing || !(spec.plMissiles > 0)) return false;
+  if (G.missileCooldown > 0) {
+    showWeaponNotice('霹雳导弹正在重新装填');
+    return false;
+  }
+  if (G.missileAmmo <= 0) {
+    showWeaponNotice('霹雳导弹已耗尽');
+    return false;
+  }
+
+  const L = G.lockTarget;
+  if (!L || L.u.dead) {
+    showWeaponNotice('先按 R 锁定敌方目标');
+    return false;
+  }
+  if (!L.hostile) {
+    showWeaponNotice('霹雳导弹不能攻击友军');
+    return false;
+  }
+
+  plane.updateMatrixWorld(true);
+  const slots = plane.userData.plMissileSlots || [];
+  const slot = slots[Math.max(0, Math.min(slots.length - 1, G.missileAmmo - 1))];
+  const pos = new THREE.Vector3();
+  if (slot) {
+    slot.mount.getWorldPosition(pos);
+  } else {
+    const side = new THREE.Vector3(1, 0, 0).applyQuaternion(plane.quaternion);
+    pos.copy(plane.position).addScaledVector(side, G.missileAmmo % 2 ? -4.3 : 4.3);
+    pos.y -= 0.7;
+  }
+
+  const mesh = makePLMissileMesh(true);
+  mesh.position.copy(pos);
+  mesh.scale.setScalar(1.35);
+  const dir = getForward().clone();
+  orientToward(mesh, dir, 0);
+  scene.add(mesh);
+
+  const ms = {
+    mesh,
+    dir,
+    target: L.u,
+    targetUp: L.up,
+    kind: L.kind,
+    label: L.label,
+    spd: PL_SPEED_MIN,
+    age: 0,
+    trail: 0,
+    trailPuffs: 0,
+    trailFx: createPLTrailFx(),
+    lost: 0
+  };
+  updatePLTrailFx(ms, 0);
+  playerMissiles.push(ms);
+
+  G.missileAmmo--;
+  G.missileCooldown = spec.missileCooldown || 1.05;
+  syncPlayerMissileRack(G.missileAmmo);
+  Sound.launch();
+  spawnPLExhaustPuff(pos.clone(), 2.6, true);
+  spawnPLExhaustPuff(pos.clone().addScaledVector(dir, -1.5), 2.2, false);
+  G.shake = Math.min(1.2, G.shake + 0.22);
+  showWeaponNotice('霹雳发射 · 追踪' + (L.label || '目标'), 'ready');
+  return true;
+}
+
+function updatePLRecharge(dt) {
+  const maxAmmo = selectedAircraftSpec().plMissiles || 0;
+  if (!G.started || G.over || G.crashing || maxAmmo <= 0) {
+    G.missileReloadTimer = 0;
+    return;
+  }
+  if (G.missileAmmo >= maxAmmo) {
+    G.missileReloadTimer = 0;
+    return;
+  }
+
+  G.missileReloadTimer += dt;
+  let replenished = false;
+  while (G.missileReloadTimer >= PL_REPLENISH_INTERVAL && G.missileAmmo < maxAmmo) {
+    G.missileReloadTimer -= PL_REPLENISH_INTERVAL;
+    G.missileAmmo++;
+    replenished = true;
+  }
+  if (G.missileAmmo >= maxAmmo) G.missileReloadTimer = 0;
+  if (replenished) {
+    syncPlayerMissileRack(G.missileAmmo);
+    showWeaponNotice('霹雳补弹 +1', 'ready');
+  }
+}
+
 function bindKeyboardMouse() {
   /* ---- 键盘：WASD 飞行 / Alt 视角回正 / 左Shift 加力 / Tab 显隐鼠标 / 长按 Space 关发动机 ---- */
   window.addEventListener('keydown', e => {
     if (e.target && e.target.tagName === 'INPUT') return;   // 种子输入框内不拦截
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      if (e.repeat) return;
+      if (G.menuOpen) resumeGameFromMenu();
+      else if (G.started && !G.over && !G.crashing) showGameMenu();
+      return;
+    }
     if (e.key === 'Alt') { e.preventDefault(); resetView(); }
     if (e.code === 'Tab') { e.preventDefault(); setCursorHidden(!G.cursorHidden); return; }
     if (e.code === 'ShiftLeft') { keys.boost = true; return; }
     if (e.code === 'Space') {                              // 长按关发动机（不用 Ctrl：浏览器保留快捷键无法屏蔽）
       if (G.started && !G.over && !G.crashing) e.preventDefault(); // 飞行中拦截空格默认行为
       keys.engineCut = true;
+      return;
+    }
+    if (e.code === 'KeyF') {
+      if (e.ctrlKey || e.metaKey) return;   // 保留浏览器 Ctrl/Cmd+F
+      e.preventDefault();
+      if (!e.repeat) firePLMissile();
       return;
     }
     if (e.code === 'KeyR') {
@@ -9274,12 +11188,20 @@ function bindKeyboardMouse() {
   });
 
   /* ---- 左键：按住机炮扫射 ---- */
-  /* ---- 右键：按住轰炸瞄准（显示预瞄环），松开投弹 ---- */
+  /* ---- 右键：α型按住瞄准、松开投弹；歼-10 直接发射霹雳 ---- */
   window.addEventListener('mousedown', e => {
     if (e.button === 0) {
       keys.fire = true;
     } else if (e.button === 2) {
       e.preventDefault();
+      if (aircraftHasPLMissiles()) {
+        G.aiming = false;
+        if (G.started && !G.over && !G.crashing) {
+          firePLMissile();
+          if (navigator.vibrate) navigator.vibrate(18);
+        }
+        return;
+      }
       if (G.aiming) return;
       if (G.started && !G.over && !G.crashing) {
         G.aiming = true;
@@ -9292,6 +11214,10 @@ function bindKeyboardMouse() {
     if (e.button === 0) {
       keys.fire = false;
     } else if (e.button === 2) {
+      if (aircraftHasPLMissiles()) {
+        G.aiming = false;
+        return;
+      }
       if (!G.aiming) return;
       G.aiming = false;
       if (G.started && !G.over && !G.crashing) {
@@ -9369,7 +11295,7 @@ function lockUnitPos(L, out) {
 function findLockTarget() {
   _u1.set(0, 0, -1).applyQuaternion(camera.quaternion);   // 相机前向
   let best = null, bestD = 1e9;
-  const consider = (unit, up) => {
+  const consider = (unit, up, kind, label, hostile) => {
     if (!unit || unit.dead) return;
     _u2.copy(unit.mesh.position);
     _u2.y += up;
@@ -9378,12 +11304,15 @@ function findLockTarget() {
     if (_u3.dot(_u1) < 0.1) return;                       // 需在视野前方
     _u3.copy(_u2).project(camera);
     const d = Math.hypot(_u3.x, _u3.y);
-    if (d < bestD) { bestD = d; best = { u: unit, up }; }
+    if (d < bestD) {
+      bestD = d;
+      best = { u: unit, up, kind, label, hostile: !!hostile };
+    }
   };
-  for (const e of enemies) consider(e, 0);
-  for (const w of wingmen) consider(w, 0);
-  for (const g of aaaGuns) consider(g, 5);
-  for (const s of samSites) consider(s, 16);
+  for (const e of enemies) consider(e, 0, 'enemy', '敌机', true);
+  for (const w of wingmen) consider(w, 0, 'wingman', '友机', false);
+  for (const g of aaaGuns) consider(g, 5, 'aaa', '防空车', true);
+  for (const s of samSites) consider(s, 16, 'sam', '导弹阵地', true);
   return best;
 }
 
@@ -9525,7 +11454,8 @@ function terrainNormal(x, z, out) {
 }
 
 function updateAim() {
-  if (!G.aiming) {
+  if (!G.aiming || aircraftHasPLMissiles()) {
+    G.aiming = false;
     if (bombMark.visible) bombMark.visible = false;
     return;
   }
@@ -9680,9 +11610,13 @@ function updateCrash(dt) {
 const hudScore     = document.getElementById('hudScore');
 const hudDestroyed = document.getElementById('hudDestroyed');
 const hudAlt       = document.getElementById('hudAlt');
+const missileHud   = document.getElementById('missileHud');
+const hudMissile   = document.getElementById('hudMissile');
+const hudMissileStatus = document.getElementById('hudMissileStatus');
 const hpFill       = document.getElementById('hpFill');
 const dmgFlash     = document.getElementById('dmgFlash');
 let lastScore = -1, lastDestroyed = -1, lastAlt = -1, lastHp = -1;
+let lastMissileAmmo = -1, lastMissileStatus = '';
 
 function updateHUD() {
   const gh = terrainHeight(plane.position.x, plane.position.z);
@@ -9699,6 +11633,32 @@ function updateHUD() {
     lastHp = hpPct;
   }
   dmgFlash.style.opacity = G.hitFlash;
+
+  const spec = selectedAircraftSpec();
+  const hasPL = spec.plMissiles > 0;
+  if (missileHud) missileHud.hidden = !hasPL;
+  if (hasPL) {
+    if (hudMissile && G.missileAmmo !== lastMissileAmmo) {
+      hudMissile.textContent = G.missileAmmo;
+      lastMissileAmmo = G.missileAmmo;
+    }
+    let status = 'R 锁定 · 右键发射';
+    const reloadStatus = '补弹 ' +
+      Math.max(1, Math.ceil(PL_REPLENISH_INTERVAL - G.missileReloadTimer)) + 's';
+    if (G.missileCooldown > 0) status = '装填 ' + G.missileCooldown.toFixed(1) + 's';
+    else if (G.missileAmmo <= 0) status = reloadStatus;
+    else if (G.lockTarget && !G.lockTarget.u.dead) {
+      status = G.lockTarget.hostile
+        ? '已锁定 ' + (G.lockTarget.label || '敌方目标')
+        : '友军 · 不可发射';
+    } else if (G.missileAmmo < (spec.plMissiles || 0)) status = reloadStatus;
+    if (hudMissileStatus && status !== lastMissileStatus) {
+      hudMissileStatus.textContent = status;
+      hudMissileStatus.style.color = G.lockTarget && G.lockTarget.hostile
+        ? '#9fefff' : 'rgba(184,232,244,.72)';
+      lastMissileStatus = status;
+    }
+  }
 }
 
 /* =========================================================
@@ -9746,6 +11706,7 @@ function startGame() {
   overlay.classList.add('hide');
   setCursorHidden(true);
   applyLightingPreset(selectedLightMode);
+  const aircraftSpec = selectedAircraftSpec();
 
   clearCity();
 
@@ -9779,6 +11740,8 @@ function startGame() {
   eBullets.length = 0;
   for (const ms of missiles) scene.remove(ms.mesh);
   missiles.length = 0;
+  for (const pm of playerMissiles) disposePLMissile(pm);
+  playerMissiles.length = 0;
   for (const w of wingmen) scene.remove(w.mesh);
   wingmen.length = 0;
   wingRespawn[0] = wingRespawn[1] = 0;
@@ -9790,6 +11753,7 @@ function startGame() {
 
   G.started = true;
   G.over = false;
+  G.menuOpen = false;
   G.crashing = false;
   G.aiming = false;
   G.score = 0;
@@ -9803,8 +11767,17 @@ function startGame() {
   G.engCut = false;
   G.thrust = 1;
   G.lockTarget = null;
+  G.missileAmmo = aircraftSpec.plMissiles || 0;
+  G.missileCooldown = 0;
+  G.missileReloadTimer = 0;
+  syncPlayerMissileRack(G.missileAmmo);
   lockMarkEl.style.display = 'none';
   gunReticle.visible = false;
+  weaponNoticeTimer = 0;
+  lastMissileAmmo = -1;
+  lastMissileStatus = '';
+  const weaponWarnEl = document.getElementById('weaponWarn');
+  if (weaponWarnEl) weaponWarnEl.className = '';
 
   Sound.init();
   if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
@@ -9815,9 +11788,15 @@ function startGame() {
 }
 
 function showGameOver() {
+  G.menuOpen = false;
   setCursorHidden(false);
   if (edgeWarnEl) edgeWarnEl.classList.remove('show');
   if (gunReticle) gunReticle.visible = false;
+  for (const pm of playerMissiles) disposePLMissile(pm);
+  playerMissiles.length = 0;
+  weaponNoticeTimer = 0;
+  const weaponWarnEl = document.getElementById('weaponWarn');
+  if (weaponWarnEl) weaponWarnEl.className = '';
   const panel = document.getElementById('panel');
   panel.innerHTML =
     '<div class="result-view"><div class="result-card">' +
@@ -9834,9 +11813,70 @@ function showGameOver() {
 }
 
 function onStartClick() {
+  disposeAircraftPreview();
   Sound.init();
   if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
   startGame();
+}
+
+function clearGameplayInput() {
+  keys.left = keys.right = keys.up = keys.down = keys.fire = false;
+  keys.boost = false;
+  keys.engineCut = false;
+  G.aiming = false;
+  mousePX = null;
+  mousePY = null;
+  if (bombMark) bombMark.visible = false;
+  if (gunReticle) gunReticle.visible = false;
+}
+
+function showGameMenu() {
+  if (!G.started || G.over || G.crashing) return;
+  G.started = false;
+  G.menuOpen = true;
+  clearGameplayInput();
+  setCursorHidden(false);
+  Sound.silenceEngine();
+  overlay.classList.remove('hide');
+  const panel = document.getElementById('panel');
+  panel.innerHTML =
+    '<div class="game-menu-view"><section class="game-menu-card">' +
+      '<div class="result-kicker">MISSION PAUSED</div>' +
+      '<h1>任务菜单</h1>' +
+      '<p>战斗已暂停。再次按 Esc 可以继续任务。</p>' +
+      '<div class="game-menu-options">' +
+        '<button class="game-menu-option primary" id="menuRestartBtn" type="button">' +
+          '<span><strong>重装上阵</strong><small>重新开始当前任务</small></span>' +
+          '<span class="menu-arrow">↻</span>' +
+        '</button>' +
+        '<button class="game-menu-option" id="menuCarrierBtn" type="button">' +
+          '<span><strong>返回母舰</strong><small>回到任务前的机库</small></span>' +
+          '<span class="menu-arrow">←</span>' +
+        '</button>' +
+      '</div>' +
+      '<div class="game-menu-hint">ESC 继续任务</div>' +
+    '</section></div>';
+  document.getElementById('menuRestartBtn').addEventListener('click', () => {
+    G.menuOpen = false;
+    startGame();
+  });
+  document.getElementById('menuCarrierBtn').addEventListener('click', () => {
+    G.menuOpen = false;
+    G.started = false;
+    showAircraftScreen();
+  });
+}
+
+function resumeGameFromMenu() {
+  if (!G.menuOpen) return;
+  G.menuOpen = false;
+  G.started = true;
+  overlay.classList.add('hide');
+  setCursorHidden(true);
+  clearGameplayInput();
+  clock.getDelta();
+  Sound.init();
+  if (Sound.ctx && Sound.ctx.state === 'suspended') Sound.ctx.resume();
 }
 
 /* =========================================================
@@ -9848,6 +11888,7 @@ let currentSeed = '';
 let previewBase = null;
 let dragState = null;
 let mapCanvasEl = null;
+let aircraftPreview = null;
 let genUI = null;
 let isGenerating = false;
 let generationToken = 0;
@@ -9856,10 +11897,11 @@ const HINT_DEFAULT = '';
 
 const WORLD_STAGE_SPECS = [
   { key:'mountains', label:'塑造地形' },
-  { key:'cities', label:'规划城市' },
   { key:'rivers', label:'生成河流' },
+  { key:'cities', label:'规划城市' },
   { key:'lakes', label:'生成湖泊' },
   { key:'villages', label:'规划村庄' },
+  { key:'terrainBase', label:'定稿基础地形' },
   { key:'roads', label:'生成道路' },
   { key:'cityRoads', label:'连接城市' },
   { key:'roadField', label:'压实路基' },
@@ -9872,6 +11914,7 @@ const WORLD_STAGE_SPECS = [
   { key:'meadows', label:'铺展草甸' },
   { key:'rocks', label:'散布岩石' },
   { key:'terrainSmooth', label:'平滑地形边缘' },
+  { key:'transportClearance', label:'检测交通穿模' },
   { key:'audit', label:'检查地形' },
   { key:'terrainMesh', label:'构建地形模型' },
   { key:'waterMesh', label:'生成水面' },
@@ -9954,10 +11997,22 @@ function completeGenerationUI() {
   genUI.step.textContent = WORLD_STAGE_SPECS.length + ' / ' + WORLD_STAGE_SPECS.length;
 }
 
+function screenBackMarkup() {
+  return '<div class="screen-back-row">' +
+    '<button class="screen-back" id="screenBackBtn" type="button" aria-label="返回上一个界面">← 返回</button>' +
+  '</div>';
+}
+
+function bindScreenBack(handler) {
+  const button = document.getElementById('screenBackBtn');
+  if (button) button.addEventListener('click', handler);
+}
+
 function showLoadingScreen() {
   const panel = document.getElementById('panel');
   panel.innerHTML =
     '<div class="start-shell loading-view">' +
+      screenBackMarkup() +
       '<main class="loading-stage">' +
         '<section class="loading-copy">' +
           '<h1>正在生成世界</h1>' +
@@ -9976,13 +12031,16 @@ function showLoadingScreen() {
     percent: document.getElementById('genPercent'),
     step: document.getElementById('genStep')
   };
+  bindScreenBack(() => showSeedScreen());
 }
 
 function showSeedScreen(message) {
   generationToken++;
   isGenerating = false;
+  disposeAircraftPreview();
   G.started = false;
   G.over = false;
+  G.menuOpen = false;
   G.crashing = false;
   if (plane) plane.visible = false;
   setCursorHidden(false);
@@ -10017,9 +12075,10 @@ function showSeedScreen(message) {
   setTimeout(() => input.focus(), 40);
 }
 
-async function runStepsAsync(iterator, report) {
+async function runStepsAsync(iterator, report, shouldCancel) {
   let step = iterator.next();
   while (!step.done) {
+    if (shouldCancel && shouldCancel()) return null;
     report(step.value);
     await yieldToPaint();
     step = iterator.next();
@@ -10030,11 +12089,13 @@ async function runStepsAsync(iterator, report) {
 async function startGeneration(seedStr) {
   if (isGenerating) return;
   isGenerating = true;
+  disposeAircraftPreview();
   const token = ++generationToken;
   const s = normalizeSeed(seedStr);
   currentSeed = s;
   G.started = false;
   G.over = false;
+  G.menuOpen = false;
   G.crashing = false;
   if (plane) plane.visible = false;
   setCursorHidden(false);
@@ -10044,16 +12105,17 @@ async function startGeneration(seedStr) {
     await yieldToPaint();
     GEN = await runStepsAsync(genWorldSteps(hashStr(s)), key => {
       if (token === generationToken) setGenerationStage(key);
-    });
-    if (token !== generationToken) return;
+    }, () => token !== generationToken);
+    if (!GEN || token !== generationToken) return;
     clearWorld();
     await runStepsAsync(buildWorldSteps(), key => {
       if (token === generationToken) setGenerationStage(key);
-    });
+    }, () => token !== generationToken);
     if (token !== generationToken) return;
-    await renderPreviewBaseAsync(fraction => {
+    const previewComplete = await renderPreviewBaseAsync(fraction => {
       if (token === generationToken) setGenerationStage('previewBase', fraction);
-    });
+    }, () => token !== generationToken);
+    if (!previewComplete || token !== generationToken) return;
     setGenerationStage('previewLayers');
     await yieldToPaint();
     PLAN = autoPlaceUnits(5, 3);
@@ -10137,15 +12199,17 @@ function renderPreviewBase() {
   previewBase = surface.off;
 }
 
-async function renderPreviewBaseAsync(report) {
+async function renderPreviewBaseAsync(report, shouldCancel) {
   const surface = createPreviewSurface();
   const chunk = 36;
   for (let iz = 0; iz < PREV_N; iz += chunk) {
+    if (shouldCancel && shouldCancel()) return false;
     paintPreviewRows(surface, iz, Math.min(PREV_N, iz + chunk));
     report(Math.min(1, (iz + chunk) / PREV_N));
     await yieldToPaint();
   }
   previewBase = surface.off;
+  return true;
 }
 
 const mapToWorld = (px, py) => ({
@@ -10375,17 +12439,272 @@ function changeCount(kind, d) {
   drawPreview();
 }
 
+function disposeAircraftPreview() {
+  if (!aircraftPreview) return;
+  const preview = aircraftPreview;
+  aircraftPreview = null;
+  if (preview.model) {
+    preview.model.traverse(obj => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach(mat => mat.dispose());
+      }
+    });
+  }
+  if (preview.renderer) {
+    preview.renderer.dispose();
+    if (preview.renderer.forceContextLoss) preview.renderer.forceContextLoss();
+  }
+}
+
+function resizeAircraftPreview() {
+  if (!aircraftPreview) return;
+  const canvas = document.getElementById('aircraftPreview');
+  if (!canvas) return;
+  const w = Math.max(320, canvas.clientWidth || 720);
+  const h = Math.max(280, canvas.clientHeight || 480);
+  aircraftPreview.camera.aspect = w / h;
+  aircraftPreview.camera.updateProjectionMatrix();
+  aircraftPreview.renderer.setSize(w, h, false);
+}
+
+function initAircraftPreview() {
+  disposeAircraftPreview();
+  const canvas = document.getElementById('aircraftPreview');
+  if (!canvas || typeof THREE === 'undefined') return;
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas, antialias: true, alpha: true, powerPreference: 'low-power'
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setClearColor(0x000000, 0);
+  if ('outputEncoding' in renderer && THREE.sRGBEncoding !== undefined) {
+    renderer.outputEncoding = THREE.sRGBEncoding;
+  }
+  if (THREE.ACESFilmicToneMapping !== undefined) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.92;
+  }
+
+  const previewScene = new THREE.Scene();
+  const previewCamera = new THREE.PerspectiveCamera(32, 1.35, 0.1, 180);
+  previewCamera.position.set(22, 11.5, -28);
+  previewCamera.lookAt(0, 0.1, 0.7);
+
+  const hemi = new THREE.HemisphereLight(0xd8f3ff, 0x44111a, 0.78);
+  previewScene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffd2ae, 0.95);
+  key.position.set(-11, 17, -12);
+  previewScene.add(key);
+  const rim = new THREE.DirectionalLight(0x72d8ff, 0.58);
+  rim.position.set(14, 8, 16);
+  previewScene.add(rim);
+  const under = new THREE.PointLight(0xff5b68, 0.28, 42, 2);
+  under.position.set(0, -3.5, 0);
+  previewScene.add(under);
+
+  const model = selectedAircraftSpec().factory();
+  model.position.y = -0.45;
+  model.rotation.z = 0.015;
+  const pivot = new THREE.Group();
+  pivot.rotation.y = 0.36;
+  pivot.add(model);
+  previewScene.add(pivot);
+
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(10.2, 72),
+    new THREE.MeshBasicMaterial({
+      color: 0x6bd8f1, transparent: true, opacity: 0.026, depthWrite: false
+    })
+  );
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = -3.0;
+  previewScene.add(disc);
+  for (const radius of [7.4, 10.15]) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(radius, radius + 0.06, 96),
+      new THREE.MeshBasicMaterial({
+        color: radius > 9 ? 0xff6d75 : 0x74d9f2,
+        transparent: true, opacity: radius > 9 ? 0.30 : 0.17,
+        side: THREE.DoubleSide, depthWrite: false
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = -2.98;
+    previewScene.add(ring);
+  }
+
+  aircraftPreview = {
+    renderer, scene: previewScene, camera: previewCamera,
+    pivot, model, orbitYaw: Math.atan2(22, -28), orbitPitch: 0.31,
+    orbitRadius: 35.2, time: 0, dragging: false, lastX: 0, lastY: 0
+  };
+  resizeAircraftPreview();
+
+  canvas.addEventListener('pointerdown', e => {
+    if (!aircraftPreview) return;
+    aircraftPreview.dragging = true;
+    aircraftPreview.lastX = e.clientX;
+    aircraftPreview.lastY = e.clientY;
+    canvas.classList.add('dragging');
+    if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!aircraftPreview || !aircraftPreview.dragging) return;
+    const dx = e.clientX - aircraftPreview.lastX;
+    const dy = e.clientY - aircraftPreview.lastY;
+    aircraftPreview.orbitYaw -= dx * 0.009;
+    aircraftPreview.orbitPitch = Math.max(-1.42, Math.min(1.42,
+      aircraftPreview.orbitPitch + dy * 0.008));
+    aircraftPreview.lastX = e.clientX;
+    aircraftPreview.lastY = e.clientY;
+  });
+  const endAircraftDrag = () => {
+    if (!aircraftPreview) return;
+    aircraftPreview.dragging = false;
+    canvas.classList.remove('dragging');
+  };
+  canvas.addEventListener('pointerup', endAircraftDrag);
+  canvas.addEventListener('pointercancel', endAircraftDrag);
+}
+
+function updateAircraftPreview(dt) {
+  const preview = aircraftPreview;
+  if (!preview) return;
+  preview.time += dt;
+  if (!preview.dragging) preview.orbitYaw += dt * 0.17;
+  const orbitRadius = preview.orbitRadius + Math.abs(preview.orbitPitch) * 6;
+  const horizontal = Math.cos(preview.orbitPitch) * orbitRadius;
+  preview.camera.position.set(
+    Math.sin(preview.orbitYaw) * horizontal,
+    0.1 + Math.sin(preview.orbitPitch) * orbitRadius,
+    Math.cos(preview.orbitYaw) * horizontal
+  );
+  preview.camera.lookAt(0, 0.1, 0.7);
+  preview.model.position.y = -0.45 + Math.sin(preview.time * 0.9) * 0.13;
+  const flame = preview.model.userData.flame;
+  if (flame) {
+    const pulse = 0.92 + Math.sin(preview.time * 8.5) * 0.07;
+    flame.scale.set(1, pulse, 1);
+    const anchorZ = preview.model.userData.flameAnchorZ;
+    const baseLength = preview.model.userData.flameBaseLength;
+    if (Number.isFinite(anchorZ) && Number.isFinite(baseLength)) {
+      flame.position.z = anchorZ + baseLength * 0.5 * pulse;
+    }
+  }
+  preview.renderer.render(preview.scene, preview.camera);
+}
+
+function showAircraftScreen() {
+  if (!GEN || !previewBase) {
+    showSeedScreen('世界尚未准备完成，请先生成地图。');
+    return;
+  }
+  G.menuOpen = false;
+  disposeAircraftPreview();
+  overlay.classList.remove('hide');
+  setCursorHidden(false);
+  if (plane) plane.visible = false;
+  const spec = selectedAircraftSpec();
+  const aircraftSpecs = Object.keys(AIRCRAFT_MODELS).map(id => AIRCRAFT_MODELS[id]);
+  const aircraftCards = aircraftSpecs.map(item => {
+    const active = item.id === selectedAircraftId;
+    return '<button class="aircraft-card' + (active ? ' active' : '') + '" ' +
+      'id="aircraft-' + escapeHtml(item.id) + '" data-aircraft="' + escapeHtml(item.id) + '" type="button">' +
+        '<span class="aircraft-card-index">' + escapeHtml(item.index) + '</span>' +
+        '<span class="aircraft-card-copy"><strong>' + escapeHtml(item.name) +
+          '</strong><small>' + escapeHtml(item.role) + '</small></span>' +
+        '<span class="aircraft-card-state">' +
+          (active ? '已选择' : escapeHtml(item.status)) + '</span>' +
+      '</button>';
+  }).join('');
+  const panel = document.getElementById('panel');
+  panel.innerHTML =
+    '<div class="start-shell aircraft-view">' +
+      screenBackMarkup() +
+      '<main class="aircraft-stage">' +
+        '<section class="aircraft-showcase">' +
+          '<div class="aircraft-showcase-head">' +
+            '<div><div class="eyebrow">AIRFRAME</div><h2>机库</h2></div>' +
+            '<div class="aircraft-code" id="aircraftCode">' + escapeHtml(spec.code) + '</div>' +
+          '</div>' +
+          '<div class="aircraft-preview-frame">' +
+            '<canvas id="aircraftPreview" aria-label="' + escapeHtml(spec.name) + '座驾三维预览"></canvas>' +
+            '<div class="aircraft-reticle"></div>' +
+            '<div class="aircraft-drag-hint">拖动全向观察</div>' +
+            '<div class="aircraft-nameplate"><h1 id="aircraftName">' + escapeHtml(spec.name) + '</h1>' +
+              '<p id="aircraftRole">' + escapeHtml(spec.role) + '</p></div>' +
+          '</div>' +
+          '<div class="aircraft-showcase-foot">' +
+            '<div><span>状态</span><strong id="aircraftStatus">' + escapeHtml(spec.status) + '</strong></div>' +
+            '<div><span>编号</span><strong>' + escapeHtml(spec.code) + '</strong></div>' +
+            '<div><span>挂载</span><strong>' + escapeHtml(spec.payload) + '</strong></div>' +
+          '</div>' +
+        '</section>' +
+        '<aside class="aircraft-select-column"><div class="aircraft-select-inner">' +
+          '<div class="aircraft-select-intro"><div class="eyebrow">AIRCRAFT ' +
+            String(aircraftSpecs.length).padStart(2, '0') + '</div>' +
+            '<h2>选择座驾</h2>' +
+            '<p>选择出击机体。</p></div>' +
+          '<div class="aircraft-list">' + aircraftCards + '</div>' +
+          '<div class="aircraft-spec-card">' +
+            '<div class="aircraft-spec-head"><h3>机体参数</h3><span>' + escapeHtml(spec.name) + '</span></div>' +
+            '<div class="aircraft-spec-grid">' +
+              '<div><span>最高速度</span><strong id="aircraftSpeed">' + escapeHtml(spec.speed) + '</strong></div>' +
+              '<div><span>机动性能</span><strong id="aircraftAgility">' + escapeHtml(spec.agility) + '</strong></div>' +
+              '<div><span>标准挂载</span><strong id="aircraftPayload">' + escapeHtml(spec.payload) + '</strong></div>' +
+              '<div><span>结构强度</span><strong id="aircraftHull">' + escapeHtml(spec.hull) + '</strong></div>' +
+            '</div>' +
+            '<div class="aircraft-description" id="aircraftDescription">' + escapeHtml(spec.description) + '</div>' +
+          '</div>' +
+          '<div class="aircraft-launch">' +
+            '<button class="btn btn-primary" id="aircraftStartBtn" type="button">开始任务 <span>→</span></button>' +
+            '<button class="btn btn-ghost" id="backSetupBtn" type="button">返回部署</button>' +
+          '</div>' +
+        '</div></aside>' +
+      '</main>' +
+    '</div>';
+  bindAircraftPanel();
+  bindScreenBack(() => showSetupScreen());
+  initAircraftPreview();
+  updateAircraftPreview(0);
+}
+
+function bindAircraftPanel() {
+  const $ = id => document.getElementById(id);
+  for (const id of Object.keys(AIRCRAFT_MODELS)) {
+    const card = $('aircraft-' + id);
+    if (!card) continue;
+    card.addEventListener('click', () => {
+      if (selectedAircraftId === id) return;
+      selectedAircraftId = id;
+      replacePlayerAircraftModel();
+      showAircraftScreen();
+    });
+  }
+  $('aircraftStartBtn').addEventListener('click', onStartClick);
+  $('backSetupBtn').addEventListener('click', () => {
+    disposeAircraftPreview();
+    showSetupScreen();
+  });
+}
+
 function showSetupScreen() {
   if (!GEN || !previewBase) {
     showSeedScreen('世界尚未准备完成，请先生成地图。');
     return;
   }
+  G.menuOpen = false;
+  disposeAircraftPreview();
   overlay.classList.remove('hide');
   setCursorHidden(false);
   if (plane) plane.visible = false;
   const panel = document.getElementById('panel');
   panel.innerHTML =
     '<div class="start-shell setup-view">' +
+      screenBackMarkup() +
       '<main class="setup-stage">' +
         '<section class="map-column">' +
           '<div class="column-heading"><h2>战术地图</h2></div>' +
@@ -10414,17 +12733,18 @@ function showSetupScreen() {
               '</div>' +
             '</div>' +
             '</div>' +
-            '<button class="btn btn-primary" id="startBtn" type="button">开始任务</button>' +
+            '<button class="btn btn-primary" id="aircraftBtn" type="button">选择座驾 <span>→</span></button>' +
           '</div>' +
         '</aside>' +
       '</main>' +
     '</div>';
   bindStartPanel();
+  bindScreenBack(() => showSeedScreen());
 }
 
 function bindStartPanel() {
   const $ = id => document.getElementById(id);
-  $('startBtn').addEventListener('click', onStartClick);
+  $('aircraftBtn').addEventListener('click', showAircraftScreen);
   $('aaaPlus').addEventListener('click', () => changeCount('aaa', 1));
   $('aaaMinus').addEventListener('click', () => changeCount('aaa', -1));
   $('samPlus').addEventListener('click', () => changeCount('sam', 1));
@@ -10505,6 +12825,13 @@ function buildStartPanel() {
    主更新
 ========================================================= */
 function update(dt) {
+  if (weaponNoticeTimer > 0) {
+    weaponNoticeTimer -= dt;
+    if (weaponNoticeTimer <= 0) {
+      const el = document.getElementById('weaponWarn');
+      if (el) el.className = '';
+    }
+  }
   if (!G.started || G.over) return;
   if (worldWater && worldWater.material.uniforms) {
     worldWater.material.uniforms.uTime.value += dt;
@@ -10513,6 +12840,8 @@ function update(dt) {
   updateRailTrains(dt);
 
   if (G.crashing) { updateCrash(dt); return; }
+  if (G.missileCooldown > 0) G.missileCooldown = Math.max(0, G.missileCooldown - dt);
+  updatePLRecharge(dt);
 
   /* 加力（左Shift）：平滑升降，供速度 / 尾焰 / 引擎声共用 */
   G.boost += ((keys.boost ? 1 : 0) - G.boost) * (1 - Math.exp(-9 * dt));
@@ -10596,7 +12925,10 @@ function update(dt) {
       const sh = sw * (0.85 + Math.random() * 0.55);               // 高度
       const kz = sw * (1 + bs * 1.9);                              // 长度（scale.y 对应世界 Z 向）
       flame.scale.set(sw, kz, sh);
-      flame.position.z = 5.95 + 1.4 * kz;                          // 根部固定在喷口内，只向后延伸
+      const anchorZ = plane.userData.flameAnchorZ;
+      const baseLength = plane.userData.flameBaseLength;
+      flame.position.z = (Number.isFinite(anchorZ) ? anchorZ : 5.95) +
+                          (Number.isFinite(baseLength) ? baseLength : 2.8) * 0.5 * kz;
       flame.material.opacity = Math.min(1, 0.45 + Math.random() * 0.45 + bs * 0.4);
       flame.material.color.setRGB(0.5 + bs * 0.42, 0.88 + bs * 0.08, 1);
     }
@@ -10620,6 +12952,7 @@ function update(dt) {
 
   /* 子弹 */
   updateBullets(dt);
+  updatePlayerMissiles(dt);
 
   /* 敌方单位（防空机枪 / 导弹阵地 / 敌机 / 弹幕） */
   updateAAA(dt);
@@ -10715,7 +13048,7 @@ function init() {
 
   BOMB_PROTO = makeBombProto();
 
-  plane = createPlane();
+  plane = createSelectedAircraft();
   scene.add(plane);
   plane.visible = false;
 
@@ -10785,6 +13118,7 @@ function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  resizeAircraftPreview();
 }
 
 /* =========================================================
@@ -10795,6 +13129,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   update(dt);
   renderer.render(scene, camera);
+  updateAircraftPreview(dt);
 }
 
 /* =========================================================

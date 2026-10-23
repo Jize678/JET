@@ -13,44 +13,256 @@
 
   /* 游戏中隐藏鼠标光标（Tab 键切换） */
   body.hide-cursor,body.hide-cursor *{cursor:none !important}
-  #hud{position:fixed;inset:0;pointer-events:none;color:#fff1ee;
-       text-shadow:0 2px 8px rgba(0,0,0,.65);font-size:13px;letter-spacing:.5px;z-index:5}
-  .hud-row{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;
-           display:flex;justify-content:space-between;padding:0 16px}
-  .hud-item{background:rgba(43,11,15,.58);backdrop-filter:blur(6px);
-            -webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,112,116,.30);
-            border-radius:12px;padding:6px 12px;display:flex;flex-direction:column;
-            align-items:center;min-width:64px}
-  .hud-item .label{font-size:10px;opacity:.78;letter-spacing:1px;color:#ffc9c7}
-  .hud-item .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff3f0}
-  .hud-item .hpbar{width:76px;height:9px;border-radius:5px;margin-top:5px;
-                   background:rgba(255,116,118,.14);overflow:hidden}
-  #hpFill{height:100%;width:100%;border-radius:5px;background:#ff6268}
-  #missileHud{min-width:88px}
-  #missileHud[hidden]{display:none}
-  #missileHud .val{color:#9fefff}
-  #hudMissileStatus{margin-top:4px;font-size:8px;line-height:1.2;letter-spacing:.05em;
-            color:rgba(184,232,244,.72);white-space:nowrap}
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:5;
+       --hud-bg:rgba(8,24,37,.68);--hud-bg-deep:rgba(5,17,28,.84);
+       --hud-line:rgba(126,170,191,.25);--hud-line-hot:rgba(159,214,229,.62);
+       --hud-text:#dce9ec;--hud-muted:#7f98a4;--hud-faint:#526c78;
+       --hud-cyan:#9cd4df;--hud-friend:#75b8cf;--hud-danger:#b87978;
+       --hud-warn:#c3aa76;color:var(--hud-text);
+       font-family:"Bahnschrift","DIN Alternate","Microsoft YaHei",sans-serif;
+       font-size:12px;letter-spacing:.04em;text-shadow:0 1px 8px rgba(0,10,18,.55)}
+  .hud-tech-panel{position:absolute;background:
+           linear-gradient(145deg,rgba(14,36,52,.72),rgba(5,17,28,.58));
+           border:1px solid var(--hud-line);backdrop-filter:blur(14px) saturate(.72);
+           -webkit-backdrop-filter:blur(14px) saturate(.72);
+           box-shadow:0 16px 34px rgba(0,8,14,.22),inset 0 1px 0 rgba(204,235,241,.06);
+           animation:hudPanelIn .5s cubic-bezier(.2,.72,.2,1) both}
+  .hud-tech-panel::before,.hud-tech-panel::after{content:'';position:absolute;pointer-events:none}
+  .hud-tech-panel::before{left:-1px;top:12px;width:10px;height:26px;
+           border-left:2px solid var(--hud-line-hot);border-top:1px solid var(--hud-line-hot);
+           border-bottom:1px solid var(--hud-line-hot)}
+  .hud-tech-panel::after{right:7px;bottom:6px;width:28px;height:1px;
+           background:linear-gradient(90deg,transparent,var(--hud-line-hot))}
+  @keyframes hudPanelIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  .hud-tech-kicker{display:flex;align-items:center;justify-content:space-between;gap:12px;
+           min-height:25px;padding:0 11px;border-bottom:1px solid rgba(126,170,191,.14);
+           color:var(--hud-muted);font:600 9px/1 ui-monospace,SFMono-Regular,Consolas,monospace;
+           letter-spacing:.14em;text-transform:uppercase}
+  .hud-tech-kicker b{color:var(--hud-cyan);font-weight:600}
+
+  .flight-panel{left:max(18px,env(safe-area-inset-left,0px));top:max(16px,env(safe-area-inset-top,0px));
+           width:clamp(286px,21vw,336px);clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,12px 100%,0 calc(100% - 12px))}
+  .flight-head{display:flex;align-items:center;justify-content:space-between;padding:11px 12px 9px}
+  .flight-id{display:flex;align-items:center;gap:9px;min-width:0}
+  .flight-id-mark{width:3px;height:28px;background:linear-gradient(var(--hud-cyan),rgba(156,212,223,.12))}
+  .flight-id strong{display:block;font-size:15px;line-height:1.05;font-weight:650;letter-spacing:.09em}
+  .flight-id span{display:block;margin-top:4px;color:var(--hud-faint);font:500 8px/1 ui-monospace,Consolas,monospace;
+           letter-spacing:.16em}
+  .flight-class{color:var(--hud-muted);font:500 8px/1.35 ui-monospace,Consolas,monospace;
+           letter-spacing:.1em;text-align:right}
+  .integrity-block{padding:0 12px 11px}
+  .integrity-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:6px}
+  .integrity-head span{color:var(--hud-muted);font:600 9px/1 ui-monospace,Consolas,monospace;letter-spacing:.14em}
+  .integrity-value{font:600 17px/1 ui-monospace,Consolas,monospace;color:var(--hud-text);font-variant-numeric:tabular-nums}
+  .integrity-value small{font-size:9px;color:var(--hud-faint)}
+  .hpbar{position:relative;height:8px;background:rgba(92,130,145,.14);overflow:hidden;
+           border:1px solid rgba(126,170,191,.12)}
+  .hpbar::after{content:'';position:absolute;inset:0;pointer-events:none;
+           background:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(7,20,29,.75) calc(10% - 1px),rgba(7,20,29,.75) 10%)}
+  #hpFill{height:100%;width:100%;background:#78aeb4;transition:width .18s ease,background .18s ease;
+           box-shadow:0 0 14px rgba(120,174,180,.34)}
+  .telemetry-grid{display:grid;grid-template-columns:1.05fr 1.25fr .8fr;
+           border-top:1px solid rgba(126,170,191,.13)}
+  .telemetry-cell{min-width:0;padding:10px 11px 12px;border-right:1px solid rgba(126,170,191,.11)}
+  .telemetry-cell:last-child{border-right:0}
+  .telemetry-cell span{display:block;color:var(--hud-faint);font:600 8px/1 ui-monospace,Consolas,monospace;
+           letter-spacing:.12em;text-transform:uppercase}
+  .telemetry-cell strong{display:block;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+           color:var(--hud-text);font:600 16px/1 ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+  .telemetry-cell small{display:block;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+           color:var(--hud-muted);font:500 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.08em}
+  .telemetry-cell strong.alert{color:var(--hud-warn)}
+  .telemetry-cell strong.boost{color:var(--hud-cyan);text-shadow:0 0 10px rgba(156,212,223,.35)}
+  .telemetry-cell strong.danger{color:var(--hud-danger)}
+
+  .mission-strip{position:absolute;left:50%;top:max(16px,env(safe-area-inset-top,0px));
+           transform:translateX(-50%);display:flex;align-items:stretch;min-width:214px;
+           background:rgba(7,22,34,.54);border:1px solid rgba(126,170,191,.18);
+           backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+           clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%,0 10px)}
+  .mission-cell{min-width:94px;padding:8px 15px;text-align:center}
+  .mission-cell+.mission-cell{border-left:1px solid rgba(126,170,191,.14)}
+  .mission-cell span{display:block;color:var(--hud-faint);font:600 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.14em}
+  .mission-cell b{display:block;margin-top:5px;color:var(--hud-text);font:600 15px/1 ui-monospace,Consolas,monospace;
+           font-variant-numeric:tabular-nums}
+
+  .radar-panel{right:max(18px,env(safe-area-inset-right,0px));top:max(16px,env(safe-area-inset-top,0px));
+           width:clamp(220px,18vw,264px);clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
+  .radar-shell{position:relative;width:calc(100% - 28px);aspect-ratio:1/1;margin:12px auto 8px}
+  #radarCanvas{width:100%;height:100%;border-radius:50%;
+           filter:drop-shadow(0 0 13px rgba(93,157,181,.12))}
+  .radar-axis-label{position:absolute;color:var(--hud-faint);font:600 7px/1 ui-monospace,Consolas,monospace;
+           letter-spacing:.1em}
+  .radar-axis-label.forward{left:50%;top:4px;transform:translateX(-50%)}
+  .radar-axis-label.range{right:8%;bottom:10%}
+  .radar-readout{display:flex;align-items:center;justify-content:space-between;
+           padding:0 12px 9px;color:var(--hud-muted);font:600 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.1em}
+  .radar-readout b{color:var(--hud-cyan);font-weight:600}
+  .radar-legend{display:flex;align-items:center;justify-content:center;gap:11px;
+           min-height:29px;border-top:1px solid rgba(126,170,191,.13);
+           color:var(--hud-muted);font:500 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.06em}
+  .radar-legend span{display:inline-flex;align-items:center;gap:5px}
+  .radar-dot{width:6px;height:6px;transform:rotate(45deg);border:1px solid currentColor}
+  .radar-dot.friend{border-color:var(--hud-friend);background:rgba(117,184,207,.2)}
+  .radar-dot.hostile{border-color:var(--hud-danger);background:rgba(184,121,120,.16)}
+  .radar-dot.ground{border-color:var(--hud-warn);background:rgba(195,170,118,.15)}
+
+  .weapon-panel{position:absolute;left:max(18px,env(safe-area-inset-left,0px));bottom:max(18px,env(safe-area-inset-bottom,0px));
+           width:min(520px,calc(100vw - 310px));
+           background:linear-gradient(135deg,rgba(8,24,37,.68),rgba(5,17,28,.50));
+           border:1px solid rgba(126,170,191,.2);backdrop-filter:blur(13px) saturate(.72);
+           -webkit-backdrop-filter:blur(13px) saturate(.72);
+           clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,0 100%)}
+  .weapon-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px 7px;
+           border-bottom:1px solid rgba(126,170,191,.14);color:var(--hud-muted);
+           font:600 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.13em}
+  .weapon-head b{color:var(--hud-cyan);font-weight:600}
+  .weapon-rack{display:flex;gap:7px;padding:8px}
+  .weapon-slice{position:relative;flex:1 1 150px;min-width:132px;height:92px;overflow:hidden;
+           border:1px solid rgba(126,170,191,.17);background:rgba(10,29,43,.48);
+           color:rgba(189,211,218,.46);transition:color .14s,border-color .14s,background .14s,box-shadow .14s,opacity .14s}
+  .weapon-slice[hidden]{display:none}
+  .weapon-slice::after{content:'';position:absolute;inset:0;pointer-events:none;
+           background:linear-gradient(105deg,transparent 35%,rgba(173,225,235,.055) 50%,transparent 66%);
+           transform:translateX(-120%)}
+  .weapon-slice.active{color:var(--hud-cyan);border-color:rgba(156,212,223,.67);
+           background:linear-gradient(135deg,rgba(37,84,103,.56),rgba(11,39,54,.66));
+           box-shadow:inset 0 0 24px rgba(122,191,210,.09),0 0 18px rgba(81,151,171,.09)}
+  .weapon-slice.active::after{animation:weaponScan .75s ease-in-out infinite}
+  @keyframes weaponScan{to{transform:translateX(120%)}}
+  .weapon-slice.unavailable{opacity:.42}
+  .weapon-index{position:absolute;left:8px;top:7px;color:var(--hud-faint);font:600 8px/1 ui-monospace,Consolas,monospace;
+           letter-spacing:.12em}
+  .weapon-icon{position:absolute;left:15px;top:25px;width:72px;height:38px;opacity:.92}
+  .weapon-icon svg{width:100%;height:100%;overflow:visible;color:currentColor}
+  .weapon-copy{position:absolute;right:9px;top:24px;text-align:right}
+  .weapon-copy strong{display:block;color:var(--hud-text);font-size:12px;line-height:1;font-weight:650;letter-spacing:.08em}
+  .weapon-copy span{display:block;margin-top:6px;color:var(--hud-muted);
+           font:500 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.09em}
+  .weapon-ammo{position:absolute;right:9px;bottom:8px;font:600 12px/1 ui-monospace,Consolas,monospace;
+           color:var(--hud-cyan);font-variant-numeric:tabular-nums}
+  .weapon-state{position:absolute;left:8px;bottom:8px;color:var(--hud-faint);
+           font:600 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.08em}
+  .weapon-slice.active .weapon-state{color:var(--hud-cyan)}
+  .weapon-slice.reload .weapon-state{color:var(--hud-warn)}
+  .weapon-slice.empty{opacity:.48}
+  .weapon-slice.empty .weapon-ammo{color:var(--hud-danger)}
+
+  /* 无面板 HUD：信息直接悬浮于场景，不使用矩形框。 */
+  .flight-panel{position:absolute;left:max(22px,env(safe-area-inset-left,0px));
+           top:max(18px,env(safe-area-inset-top,0px));width:clamp(280px,21vw,334px);
+           background:none;border:0;box-shadow:none;
+           backdrop-filter:none;-webkit-backdrop-filter:none;clip-path:none;animation:none}
+  .flight-ident{display:flex;align-items:baseline;gap:9px;min-height:24px;
+           color:var(--hud-muted);font:500 9px/1 ui-monospace,Consolas,monospace;letter-spacing:.11em}
+  .flight-ident b{color:var(--hud-cyan);font-size:12px;font-weight:600;letter-spacing:.08em}
+  .flight-ident strong{color:var(--hud-text);font-size:16px;font-weight:550;letter-spacing:.06em}
+  .flight-ident span:last-child{margin-left:auto;text-align:right}
+  .flight-line{position:relative;display:grid;align-items:center;min-height:34px;
+           border-bottom:1px solid rgba(126,170,191,.18)}
+  .flight-line::before{content:'';position:absolute;left:0;bottom:-1px;width:34px;height:1px;
+           background:linear-gradient(90deg,var(--hud-line-hot),transparent)}
+  .flight-line-label{color:var(--hud-faint);font:600 8px/1 ui-monospace,Consolas,monospace;letter-spacing:.14em}
+  .flight-line-value{color:var(--hud-text);font:600 16px/1 ui-monospace,Consolas,monospace;
+           font-variant-numeric:tabular-nums;text-align:right}
+  .flight-line-value small{font-size:8px;color:var(--hud-faint)}
+  .hull-line{grid-template-columns:48px minmax(0,1fr) 56px;gap:9px}
+  .hull-line .hpbar{height:7px;background:rgba(76,111,127,.12);border:0}
+  .alt-line{grid-template-columns:48px minmax(0,1fr) 74px;gap:9px}
+  .alt-line .flight-line-value{font-size:19px}
+  .engine-line{grid-template-columns:48px 112px minmax(45px,1fr) 38px;gap:8px;min-height:42px}
+  .engine-graphic{display:block;width:108px;height:34px;overflow:visible;color:rgba(173,207,217,.64);
+           transition:color .16s,filter .16s}
+  .engine-graphic .engine-core{fill:rgba(64,112,128,.16);stroke:currentColor;stroke-width:1.4}
+  .engine-graphic .engine-detail{fill:none;stroke:currentColor;stroke-width:1;opacity:.72}
+  .engine-graphic .engine-fan{fill:none;stroke:currentColor;stroke-width:1.2;
+           transform-origin:25px 18px;animation:engineSpin .9s linear infinite}
+  .engine-graphic .engine-rotor{fill:currentColor;opacity:.56}
+  .engine-graphic .engine-heat{fill:#c3aa76;opacity:.38}
+  .engine-graphic .engine-flame{fill:#9cd4df;opacity:.38;transform-box:fill-box;
+           transform-origin:left center;transition:opacity .16s,transform .16s}
+  .engine-graphic.boost{color:var(--hud-cyan);filter:drop-shadow(0 0 7px rgba(156,212,223,.40))}
+  .engine-graphic.boost .engine-heat{fill:#bcdde3;opacity:.8}
+  .engine-graphic.boost .engine-flame{opacity:.88}
+  .engine-graphic.cut{color:rgba(87,116,128,.42);filter:none}
+  .engine-graphic.cut .engine-fan{animation-play-state:paused}
+  .engine-graphic.cut .engine-heat,.engine-graphic.cut .engine-flame{opacity:0}
+  @keyframes engineSpin{to{transform:rotate(360deg)}}
+  .engine-power{height:4px;background:rgba(81,118,132,.13);overflow:hidden}
+  .engine-power i{display:block;height:100%;width:100%;background:var(--hud-cyan);opacity:.62;
+           box-shadow:0 0 8px rgba(156,212,223,.34);transition:width .15s linear,opacity .15s}
+  .engine-percent{font-size:11px!important}
+  .enemy-line{grid-template-columns:48px 1fr 46px;gap:9px;border-bottom:0}
+  .enemy-line .flight-line-label{color:var(--hud-muted)}
+  .enemy-line .flight-line-value{color:var(--hud-danger);font-size:19px}
+  .enemy-scan{display:flex;align-items:center;gap:4px;min-width:0;height:14px}
+  .enemy-scan i{display:block;height:1px;flex:1;background:rgba(184,121,120,.22)}
+  .enemy-scan i:nth-child(2){background:rgba(184,121,120,.48);flex:1.6}
+  .enemy-scan i:nth-child(3){background:rgba(184,121,120,.30)}
+
+  .mission-strip{background:none;border:0;box-shadow:none;backdrop-filter:none;
+           -webkit-backdrop-filter:none;clip-path:none;gap:1px}
+  .mission-cell{padding:0 18px}
+  .mission-cell+.mission-cell{border-left:1px solid rgba(126,170,191,.24)}
+  .mission-cell span{font-size:7px;color:rgba(126,156,168,.72)}
+  .mission-cell b{font-size:14px;color:rgba(220,233,236,.86)}
+
+  .radar-panel{position:absolute;right:max(20px,env(safe-area-inset-right,0px));
+           top:max(18px,env(safe-area-inset-top,0px));width:clamp(218px,18vw,258px);
+           background:none;border:0;box-shadow:none;
+           backdrop-filter:none;-webkit-backdrop-filter:none;clip-path:none;animation:none}
+  .radar-panel::before,.radar-panel::after{display:none}
+  .radar-shell{width:100%;margin:0;background:none}
+  #radarCanvas{border-radius:50%;background:transparent;
+           filter:drop-shadow(0 0 16px rgba(84,145,166,.16))}
+  .radar-axis-label{color:rgba(139,173,185,.72)}
+  .radar-axis-label.range{right:13%;bottom:12%}
+
+  .weapon-panel{width:min(456px,calc(100vw - 270px));background:none;border:0;box-shadow:none;
+           backdrop-filter:none;-webkit-backdrop-filter:none;clip-path:none;animation:none}
+  .weapon-panel::before,.weapon-panel::after{display:none}
+  .weapon-rack{display:flex;align-items:flex-end;gap:34px;padding:0 4px}
+  .weapon-slice{flex:0 1 196px;min-width:168px;height:88px;overflow:visible;
+           border:0;background:none;box-shadow:none;color:rgba(143,171,183,.52)}
+  .weapon-slice::after{background:radial-gradient(ellipse at 46% 56%,rgba(101,187,207,.18),transparent 66%);
+           transform:none;opacity:0;transition:opacity .15s}
+  .weapon-slice.active{background:none;border:0;box-shadow:none;color:var(--hud-cyan);
+           filter:drop-shadow(0 0 8px rgba(137,209,223,.20))}
+  .weapon-slice.active::after{opacity:1;animation:none}
+  .weapon-index{left:1px;top:0;font-size:11px;color:var(--hud-muted);letter-spacing:.16em}
+  .weapon-index b{color:var(--hud-cyan);font-weight:600}
+  .weapon-icon{left:17px;top:22px;width:112px;height:43px;opacity:.9;transition:transform .15s,filter .15s}
+  .weapon-slice.active .weapon-icon{transform:translateY(-1px) scale(1.035);
+           filter:drop-shadow(0 0 7px rgba(156,212,223,.44))}
+  .weapon-copy{right:1px;top:25px}
+  .weapon-copy strong{font-size:13px;color:currentColor}
+  .weapon-copy span{color:rgba(126,156,168,.70);font-size:7px}
+  .weapon-ammo{right:1px;bottom:1px;font-size:13px;color:currentColor}
+  .weapon-state{left:1px;bottom:1px;font-size:8px;color:rgba(113,145,157,.70)}
+  .weapon-slice.active .weapon-state{color:var(--hud-cyan)}
+  .weapon-slice.reload .weapon-state{color:var(--hud-warn)}
+  .weapon-slice.empty{opacity:.46}
+  .weapon-slice.empty .weapon-ammo{color:var(--hud-danger)}
   #dmgFlash{position:fixed;inset:0;pointer-events:none;opacity:0;
-            background:rgba(255,40,20,.34)}
+            background:radial-gradient(ellipse at center,rgba(98,55,60,0) 42%,rgba(131,72,75,.30) 100%)}
   #lockMark{position:fixed;left:50%;top:50%;width:46px;height:46px;display:none;
-            transform:translate(-50%,-50%);border:2px solid rgba(255,90,60,.95);
+            transform:translate(-50%,-50%);border:1.5px solid rgba(214,92,92,.94);
             border-radius:50%;pointer-events:none;z-index:7;
-            box-shadow:0 0 12px rgba(255,70,40,.55),inset 0 0 8px rgba(255,70,40,.35)}
+            box-shadow:0 0 16px rgba(206,75,75,.42),inset 0 0 10px rgba(206,75,75,.18)}
   #lockMark::after{content:'';position:absolute;left:50%;top:50%;width:4px;height:4px;
-            transform:translate(-50%,-50%);background:rgba(255,90,60,.95);border-radius:50%}
+            transform:translate(-50%,-50%);background:rgba(238,126,126,.98);border-radius:50%}
   #edgeWarn{position:fixed;left:50%;top:82px;transform:translate(-50%,-8px);
-            padding:8px 16px;border-radius:999px;background:rgba(73,15,21,.88);
-            border:1px solid rgba(255,112,116,.55);color:#ffe2df;font-size:12px;
+            padding:8px 16px;border-radius:3px;background:rgba(8,25,39,.84);
+            border:1px solid rgba(126,170,191,.42);color:#c8dce2;font-size:10px;
             letter-spacing:1px;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap}
   #edgeWarn.show{opacity:1;transform:translate(-50%,0)}
   #weaponWarn{position:fixed;left:50%;top:122px;transform:translate(-50%,-7px);
-            padding:8px 15px;border-radius:9px;background:rgba(25,12,15,.90);
-            border:1px solid rgba(255,112,116,.38);color:#ffe4df;font-size:11px;
+            padding:7px 13px;border-radius:3px;background:rgba(7,23,36,.88);
+            border:1px solid rgba(126,170,191,.32);color:#cadde2;font-size:10px;
             letter-spacing:.06em;opacity:0;pointer-events:none;
             transition:opacity .16s,transform .16s,border-color .16s;white-space:nowrap}
   #weaponWarn.show{opacity:1;transform:translate(-50%,0)}
-  #weaponWarn.ready{border-color:rgba(111,222,243,.58);color:#c9f7ff}
+  #weaponWarn.ready{border-color:rgba(156,212,223,.58);color:#d5f0f5}
   #grade{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;transition:opacity .45s ease}
   #grade.war{opacity:1;background:
            radial-gradient(ellipse at 50% 44%,rgba(106,121,126,0) 26%,rgba(30,42,45,.13) 68%,rgba(6,12,14,.46) 100%)}
@@ -402,6 +614,21 @@
     .aircraft-showcase-foot div{padding-top:6px;padding-bottom:6px}
     .aircraft-select-intro h2{font-size:28px}
   }
+  @media (max-width:1180px){
+    .flight-panel{width:270px}
+    .radar-panel{width:214px}
+    .radar-shell{width:calc(100% - 20px)}
+    .weapon-panel{width:min(466px,calc(100vw - 250px))}
+    .weapon-slice{min-width:126px;height:84px}
+    .weapon-icon{width:62px;top:24px}
+    .weapon-copy span{display:none}
+  }
+  @media (max-height:720px){
+    .flight-panel{width:258px}
+    .radar-panel{width:196px}
+    .weapon-panel{width:438px}
+    .weapon-slice{height:80px}
+  }
   @media (max-aspect-ratio:1/1){
     #overlay{overflow:auto;align-items:flex-start}
     #panel{height:auto;min-height:calc(100vh - 28px)}
@@ -424,15 +651,107 @@
 <body>
 
 <div id="hud">
-  <div class="hud-row">
-    <div class="hud-item"><span class="label">机体</span><div class="hpbar"><div id="hpFill"></div></div></div>
-    <div class="hud-item"><span class="label">得分</span><span class="val" id="hudScore">0</span></div>
-    <div class="hud-item"><span class="label">击毁敌方单位</span><span class="val" id="hudDestroyed">0</span></div>
-    <div class="hud-item"><span class="label">高度</span><span class="val" id="hudAlt">0</span></div>
-    <div class="hud-item" id="missileHud" hidden><span class="label">霹雳挂载</span>
-      <span class="val" id="hudMissile">0</span>
-      <span id="hudMissileStatus">R 锁定 · 右键发射</span></div>
-  </div>
+  <section class="flight-panel" aria-label="机体状态">
+    <div class="flight-ident">
+      <b id="hudAircraftCode">A-01</b>
+      <strong id="hudAircraftName">α型</strong>
+      <span id="hudAircraftRole">多用途攻击机</span>
+    </div>
+    <div class="flight-line hull-line">
+      <span class="flight-line-label">HULL</span>
+      <div class="hpbar"><div id="hpFill"></div></div>
+      <span class="flight-line-value"><b id="hudHpValue">32</b><small> / <span id="hudHpMax">32</span></small></span>
+    </div>
+    <div class="flight-line alt-line">
+      <span class="flight-line-label">ALT</span>
+      <span class="flight-line-label">AGL</span>
+      <span class="flight-line-value"><b id="hudAlt">0</b><small> M</small></span>
+    </div>
+    <div class="flight-line engine-line">
+      <span class="flight-line-label">ENGINE</span>
+      <svg class="engine-graphic" id="engineGraphic" viewBox="0 0 108 34" aria-label="发动机出力">
+        <path class="engine-core" d="M5 10h22l7-4h18l4 4h15l12 3v4L71 24H52l-4 4H27l-7-4H5z"/>
+        <path class="engine-detail" d="M8 13h15M8 21h15M55 9l-4 5 4 5M63 8l-4 6 4 6M71 8l-4 6 4 6"/>
+        <path class="engine-heat" d="M48 14h15v8H48z"/>
+        <g class="engine-fan">
+          <path d="M25 10v16M17 13l16 10M17 23l16-10"/>
+        </g>
+        <circle class="engine-rotor" cx="25" cy="18" r="2.2"/>
+        <path class="engine-detail" d="M82 13h8l4 2v4l-4 2h-8"/>
+        <path class="engine-flame" d="M94 17c5-4 8-3 13 0-5 3-8 4-13 0z"/>
+      </svg>
+      <span class="engine-power"><i id="enginePowerFill"></i></span>
+      <span class="flight-line-value engine-percent"><b id="hudThrottle">100</b><small>%</small></span>
+    </div>
+    <div class="flight-line enemy-line">
+      <span class="flight-line-label">AIR</span>
+      <span class="enemy-scan"><i></i><i></i><i></i></span>
+      <span class="flight-line-value" id="hudEnemyCount">00</span>
+    </div>
+  </section>
+
+  <section class="mission-strip" aria-label="战果">
+    <div class="mission-cell"><span>SCORE</span><b id="hudScore">0</b></div>
+    <div class="mission-cell"><span>ELIMINATED</span><b id="hudDestroyed">0</b></div>
+  </section>
+
+  <aside class="radar-panel" aria-label="战术雷达">
+    <div class="radar-shell">
+      <canvas id="radarCanvas" width="240" height="240"></canvas>
+      <span class="radar-axis-label forward">FWD</span>
+      <span class="radar-axis-label range">4.2 KM</span>
+    </div>
+  </aside>
+
+  <section class="weapon-panel" aria-label="机体武装">
+    <div class="weapon-rack" id="weaponRack">
+      <article class="weapon-slice" id="weaponGun">
+        <span class="weapon-index"><b>A</b> / LMB</span>
+        <div class="weapon-icon" aria-hidden="true">
+          <svg viewBox="0 0 120 46">
+            <path d="M8 21h25l5-6h18l6 4h20v8H62l-6 4H38l-5-6H8z" fill="currentColor" opacity=".78"/>
+            <path d="M82 18h29v10H82zM89 13h5v20h-5zM99 13h5v20h-5z" fill="currentColor"/>
+            <path d="M18 18h19M18 28h19M47 15v16M57 14v18M75 19h9M75 27h9" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <circle cx="27" cy="23" r="4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M99 10h5l2 8-2 8h-5z" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+        </div>
+        <div class="weapon-copy"><strong>机炮</strong><span>AUTO CANNON</span></div>
+        <span class="weapon-state" id="weaponGunState">STANDBY</span>
+        <span class="weapon-ammo" id="weaponGunAmmo">∞</span>
+      </article>
+      <article class="weapon-slice" id="weaponBomb">
+        <span class="weapon-index"><b>B</b> / RMB</span>
+        <div class="weapon-icon" aria-hidden="true">
+          <svg viewBox="0 0 120 46">
+            <path d="M24 25c5-7 15-11 28-11h32l20 9-20 9H52c-13 0-23-4-28-7z" fill="currentColor" opacity=".82"/>
+            <path d="M82 12l17 3v16l-17 3zM14 18l15 7-15 7z" fill="none" stroke="currentColor" stroke-width="2.4"/>
+            <path d="M29 23h17M52 16v18M65 16v18" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".72"/>
+            <path d="M16 23h10M97 19h11v8H97z" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <circle cx="45" cy="25" r="2" fill="currentColor"/>
+          </svg>
+        </div>
+        <div class="weapon-copy"><strong>航弹</strong><span>AIR BOMB</span></div>
+        <span class="weapon-state" id="weaponBombState">STANDBY</span>
+        <span class="weapon-ammo" id="weaponBombAmmo">∞</span>
+      </article>
+      <article class="weapon-slice" id="weaponMissile" hidden>
+        <span class="weapon-index"><b>B</b> / RMB</span>
+        <div class="weapon-icon" aria-hidden="true">
+          <svg viewBox="0 0 120 46">
+            <path d="M9 23h72l24-10 11 10-11 10-24-10H9z" fill="currentColor" opacity=".84"/>
+            <path d="M48 18l11 5-11 5M68 18l11 5-11 5M83 18l11 5-11 5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M9 20v6M17 19v8" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M25 20h58" stroke="currentColor" stroke-width="1" opacity=".65"/>
+            <path d="M91 20l10-8 4 5-6 6 6 6-4 5-10-8z" fill="none" stroke="currentColor" stroke-width="1.1"/>
+          </svg>
+        </div>
+        <div class="weapon-copy"><strong>霹雳</strong><span>ACTIVE MSL</span></div>
+        <span class="weapon-state" id="weaponMissileState">STANDBY</span>
+        <span class="weapon-ammo" id="weaponMissileAmmo">4</span>
+      </article>
+    </div>
+  </section>
   <div id="dmgFlash"></div>
   <div id="lockMark"></div>
   <div id="edgeWarn">已到达战区边界 · 自动返航</div>
@@ -3524,9 +3843,9 @@ function genFields(g, rng) {
 /* ---- 树林：多核心生态斑块（不规则的林核 / 林缘 / 空地 / 侵入草甸） ---- */
 function genForests(g, rng) {
   g.forests = [];
-  const count = 22 + ((rng() * 10) | 0);
+  const count = 44 + ((rng() * 16) | 0);
   for (let i = 0; i < count; i++) {
-    for (let t = 0; t < 280; t++) {
+    for (let t = 0; t < 520; t++) {
       const a = 600 + rng() * 550, b = 450 + rng() * 400;
       const x = (rng() * 2 - 1) * (WORLD_HALF - a - 220);
       const z = (rng() * 2 - 1) * (WORLD_HALF - b - 220);
@@ -3542,7 +3861,7 @@ function genForests(g, rng) {
         if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.8 + a * 0.22) { ok = false; break; }
       }
       if (ok) for (const f of g.forests) {
-        if (Math.hypot(x - f.x, z - f.z) < (a + f.a) * 0.46) { ok = false; break; }
+        if (Math.hypot(x - f.x, z - f.z) < (a + f.a) * 0.30) { ok = false; break; }
       }
       if (!ok) continue;
       if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 460) continue;
@@ -3587,35 +3906,38 @@ function genForests(g, rng) {
       break;
     }
   }
-  /* 少量林间小树丛，让林地之外也有自然过渡。 */
-  for (let i = 0; i < 18; i++) {
-    const x = (rng() * 2 - 1) * (WORLD_HALF - 500);
-    const z = (rng() * 2 - 1) * (WORLD_HALF - 500);
-    const h0 = rawHeight(g, x, z);
-    if (h0 < WATER_LEVEL + 6 || h0 > 360) continue;
-    if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 620) continue;
-    let blocked = roadAt(g, x, z) > 0.02 || railNear(g, x, z, 60);
-    if (!blocked) for (const ct of g.cities) {
-      if (Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz) < 1.12) { blocked = true; break; }
+  /* 林间小树丛：每个候选多次试位，让林地之外的过渡也足够密。 */
+  for (let i = 0; i < 40; i++) {
+    for (let t = 0; t < 16; t++) {
+      const x = (rng() * 2 - 1) * (WORLD_HALF - 500);
+      const z = (rng() * 2 - 1) * (WORLD_HALF - 500);
+      const h0 = rawHeight(g, x, z);
+      if (h0 < WATER_LEVEL + 6 || h0 > 360) continue;
+      if (Math.hypot(x - SPAWN_X, z - SPAWN_Z) < 620) continue;
+      let blocked = roadAt(g, x, z) > 0.02 || railNear(g, x, z, 60);
+      if (!blocked) for (const ct of g.cities) {
+        if (Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz) < 1.12) { blocked = true; break; }
+      }
+      if (!blocked) for (const v of g.villages) {
+        if (Math.hypot(x - v.x, z - v.z) < v.r * 1.15) { blocked = true; break; }
+      }
+      if (!blocked) for (const fs of (g.farmsteads || [])) {
+        if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.4) { blocked = true; break; }
+      }
+      if (blocked) continue;
+      const r = 95 + rng() * 150;
+      const rot = rng() * Math.PI;
+      g.forests.push({
+        x, z, a: r * 1.35, b: r, rot,
+        cr: Math.cos(rot), sr: Math.sin(rot),
+        seed: (g.seed ^ (0x71A2 + i * 3413)) >>> 0,
+        lobes: [{
+          x: 0, z: 0, rx: r * 0.9, rz: r * 0.62, rot: 0, cr: 1, sr: 0, w: 0.92
+        }],
+        clearings: []
+      });
+      break;
     }
-    if (!blocked) for (const v of g.villages) {
-      if (Math.hypot(x - v.x, z - v.z) < v.r * 1.15) { blocked = true; break; }
-    }
-    if (!blocked) for (const fs of (g.farmsteads || [])) {
-      if (Math.hypot(x - fs.x, z - fs.z) < fs.r * 1.4) { blocked = true; break; }
-    }
-    if (blocked) continue;
-    const r = 95 + rng() * 150;
-    g.forests.push({
-      x, z, a: r * 1.35, b: r, rot: rng() * Math.PI,
-      cr: 1, sr: 0, seed: (g.seed ^ (0x71A2 + i * 3413)) >>> 0,
-      lobes: [{
-        x: 0, z: 0, rx: r * 0.9, rz: r * 0.62, rot: 0, cr: 1, sr: 0, w: 0.92
-      }],
-      clearings: []
-    });
-    g.forests[g.forests.length - 1].cr = Math.cos(g.forests[g.forests.length - 1].rot);
-    g.forests[g.forests.length - 1].sr = Math.sin(g.forests[g.forests.length - 1].rot);
   }
 }
 
@@ -3680,7 +4002,7 @@ function meadowCoverage(m, x, z) {
 
 function genMeadows(g, rng) {
   g.meadows = [];
-  const count = 46 + ((rng() * 12) | 0);
+  const count = 58 + ((rng() * 14) | 0);
   for (let i = 0; i < count; i++) {
     for (let t = 0; t < 120; t++) {
       const a = 380 + rng() * 300, b = 300 + rng() * 250;
@@ -4501,35 +4823,74 @@ let cloudAssets = null;
 const worldClouds = [];
 function createClouds() {
   if (!cloudAssets) {
+    const geo = new THREE.SphereGeometry(1, 10, 7);
+    const position = geo.attributes.position;
+    const colors = new Float32Array(position.count * 3);
+    for (let i = 0; i < position.count; i++) {
+      const shade = 0.66 + 0.34 * smoothstep(-0.82, 0.72, position.getY(i));
+      colors[i * 3] = shade;
+      colors[i * 3 + 1] = shade * 1.01;
+      colors[i * 3 + 2] = shade * 1.035;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     cloudAssets = {
-      geo: new THREE.SphereGeometry(1, 10, 7),
+      geo,
       mat: new THREE.MeshBasicMaterial({
         color: 0xf1f6f7, transparent: true, opacity: 0.62,
+        vertexColors: true,
         depthWrite: false, depthTest: true
       })
     };
   }
   const rng = mulberry32((GEN.seed ^ 0xC10D) >>> 0);
-  for (let i = 0; i < 44; i++) {
+  const CLOUD_COUNT = 180;
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < CLOUD_COUNT; i++) {
     const cl = new THREE.Group();
-    const n = 5 + (rng() * 4 | 0);
+    const lowBand = i % 5 === 0;
+    const n = 12 + (rng() * 8 | 0);
+    const puffs = new THREE.InstancedMesh(cloudAssets.geo, cloudAssets.mat, n);
+    puffs.frustumCulled = false;
+    puffs.renderOrder = 3;
+    const span = 170 + rng() * 230;
+    const depth = 100 + rng() * 145;
+    const relief = lowBand ? 42 + rng() * 50 : 86 + rng() * 110;
     for (let j = 0; j < n; j++) {
-      const m = new THREE.Mesh(cloudAssets.geo, cloudAssets.mat);
-      const spread = j - (n - 1) * 0.5;
-      m.position.set(
-        spread * 19 + (rng() - 0.5) * 22,
-        (rng() - 0.35) * 18 + (j % 2) * 5,
-        (rng() - 0.5) * 74
+      const t = n === 1 ? 0 : j / (n - 1) - 0.5;
+      const tier = j % 3;
+      const layerY = (tier - 1) * relief * 0.22;
+      dummy.position.set(
+        t * span * 1.18 + (rng() - 0.5) * span * 0.18,
+        layerY + (rng() - 0.5) * relief * 0.42,
+        (rng() - 0.5) * depth + Math.sin(j * 1.9 + i) * depth * 0.12
       );
-      m.scale.set(26 + rng() * 32, 16 + rng() * 18, 25 + rng() * 30);
-      m.userData.cloudPuff = true;
-      m.renderOrder = 3;
-      cl.add(m);
+      dummy.rotation.set(0, rng() * 6.2832, 0);
+      dummy.scale.set(
+        span * (0.19 + rng() * 0.14),
+        relief * (0.56 + rng() * 0.50),
+        depth * (0.31 + rng() * 0.31)
+      );
+      dummy.updateMatrix();
+      puffs.setMatrixAt(j, dummy.matrix);
     }
-    cl.position.set((rng() - 0.5) * 8200, 400 + rng() * 560, (rng() - 0.5) * 8200);
+    puffs.instanceMatrix.needsUpdate = true;
+    cl.add(puffs);
+    cl.position.set(
+      (rng() - 0.5) * 10000,
+      lowBand ? 240 + rng() * 220 : 430 + rng() * 800,
+      (rng() - 0.5) * 10000
+    );
+    cl.userData.drift = 4.5 + rng() * 7.5;
     cl.renderOrder = 3;
     scene.add(cl);
     worldClouds.push(cl);
+  }
+}
+
+function updateClouds(dt) {
+  for (const cloud of worldClouds) {
+    cloud.position.x += cloud.userData.drift * dt;
+    if (cloud.position.x > 10300) cloud.position.x -= 20600;
   }
 }
 
@@ -4629,10 +4990,39 @@ function ensureVegAssets() {
   const broadGeo = new THREE.IcosahedronGeometry(1, 1);
   const bushGeo = new THREE.IcosahedronGeometry(1, 0);
   bushGeo.translate(0, 0.72, 0);
+  const makePlantTuft = (blades, height, spread) => {
+    const positions = [], colors = [];
+    for (let i = 0; i < blades; i++) {
+      const angle = i * Math.PI * 2 / blades + i * 0.37;
+      const radialX = Math.cos(angle), radialZ = Math.sin(angle);
+      const sideX = -radialZ * spread, sideZ = radialX * spread;
+      const lean = spread * (0.35 + (i % 3) * 0.18);
+      const bladeHeight = height * (0.72 + (i % 4) * 0.09);
+      positions.push(
+        -sideX, 0, -sideZ,
+        sideX, 0, sideZ,
+        radialX * lean, bladeHeight, radialZ * lean
+      );
+      colors.push(
+        0.58, 0.66, 0.50,
+        0.58, 0.66, 0.50,
+        0.92, 0.98, 0.82
+      );
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    return geo;
+  };
+  const grassGeo = makePlantTuft(4, 1.08, 0.24);
+  const fernGeo = makePlantTuft(6, 0.88, 0.38);
+  const flowerGeo = new THREE.ConeGeometry(0.18, 1, 5, 1, true);
+  flowerGeo.translate(0, 0.5, 0);
   const shadowGeo = new THREE.PlaneGeometry(2, 2);
   shadowGeo.rotateX(-Math.PI / 2);
   vegAssets = {
-    trunkGeo, leafGeo, tallGeo, broadGeo, bushGeo, shadowGeo,
+    trunkGeo, leafGeo, tallGeo, broadGeo, bushGeo, grassGeo, fernGeo, flowerGeo, shadowGeo,
     trunkMat: new THREE.MeshLambertMaterial({ color: 0x594532 }),
     leafMat: new THREE.MeshLambertMaterial({ color: 0x315c3b }),
     leafMat2: new THREE.MeshLambertMaterial({ color: 0x456e43 }),
@@ -4640,6 +5030,15 @@ function ensureVegAssets() {
     tallMat: new THREE.MeshLambertMaterial({ color: 0x294f3d }),
     bushMat: new THREE.MeshLambertMaterial({ color: 0x3c622f }),
     hedgeMat: new THREE.MeshLambertMaterial({ color: 0x355a2f }),
+    grassMat: new THREE.MeshLambertMaterial({
+      color: 0x5c7e38, vertexColors: true, side: THREE.DoubleSide
+    }),
+    fernMat: new THREE.MeshLambertMaterial({
+      color: 0x426c33, vertexColors: true, side: THREE.DoubleSide
+    }),
+    flowerMat: new THREE.MeshLambertMaterial({
+      color: 0xd0b64e, side: THREE.DoubleSide
+    }),
     shadowMat: new THREE.MeshBasicMaterial({
       map: getSoftShadowTexture(), color: 0x34463b,
       transparent: true, opacity: 0.48,
@@ -4754,7 +5153,7 @@ function removeTreeTargetsByScope(scope) {
 
 function createVegetation() {
   ensureVegAssets();
-  const COUNT = 9600;
+  const COUNT = 32000;
   const rng = mulberry32((GEN.seed ^ 0x7E33) >>> 0);
   const spots = [];
   let tries = 0;
@@ -4782,7 +5181,7 @@ function createVegetation() {
     });
   }
   /* 牧野中的树丛 / 防风林，比全图均匀撒点更像真实植被群落。 */
-  for (let gi = 0, added = 0; gi < 132 && added < 96; gi++) {
+  for (let gi = 0, added = 0; gi < 340 && added < 260; gi++) {
     const gx = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const gz = (rng() * 2 - 1) * (WORLD_HALF - 500);
     const gh = terrainHeight(gx, gz);
@@ -4816,13 +5215,13 @@ function createVegetation() {
   scene.add(treeGroup);
   worldTrees.push(treeGroup);
 
-  /* 灌木：颜色略提亮，密度降一点，把预算留给更有轮廓的树冠。 */
-  const BCOUNT = 9200;
+  /* 灌木：在低频噪声形成的灌丛带里加密，避免全图均匀撒点。 */
+  const BCOUNT = 60000;
   const bushes = new THREE.InstancedMesh(vegAssets.bushGeo, vegAssets.bushMat, BCOUNT);
   bushes.frustumCulled = false;
   let bp = 0, bt = 0;
   const dummy = new THREE.Object3D();
-  while (bp < BCOUNT && bt < BCOUNT * 9) {
+  while (bp < BCOUNT && bt < BCOUNT * 12) {
     bt++;
     const x = (rng() * 2 - 1) * (WORLD_HALF - 120);
     const z = (rng() * 2 - 1) * (WORLD_HALF - 120);
@@ -4835,7 +5234,7 @@ function createVegetation() {
     if (inCity || roadAt(GEN, x, z) > 0.03 || insideFarmstead(x, z, 1.55) ||
         insideField(x, z, 1.0) || railNear(GEN, x, z, 20)) continue;
     const f2 = fbm(x * 0.0012, z * 0.0012, (GEN.seed ^ 0x51B7) >>> 0, 2);
-    if (rng() > 0.24 + 0.9 * f2) continue;
+    if (rng() > 0.58 + 0.92 * f2) continue;
     const s = 0.7 + rng() * 1.75;
     dummy.position.set(x, h - 0.22, z);
     dummy.rotation.set(0, rng() * 6.2832, 0);
@@ -6736,7 +7135,12 @@ function insideFarmstead(x, z, mul) {
 function insideField(x, z, mul) {
   for (const f of GEN.fields) {
     const dx = x - f.x, dz = z - f.z;
-    const c = Math.cos(f.rot), s = Math.sin(f.rot);
+    if (Math.abs(dx) > f.rad * mul || Math.abs(dz) > f.rad * mul) continue;
+    if (f._cr === undefined) {
+      f._cr = Math.cos(f.rot);
+      f._sr = Math.sin(f.rot);
+    }
+    const c = f._cr, s = f._sr;
     const lx = c * dx + s * dz, lz = -s * dx + c * dz;
     if (Math.abs(lx) > f.w * 0.62 * mul || Math.abs(lz) > f.d * 0.62 * mul) continue;
     const poly = f.poly;
@@ -7105,12 +7509,12 @@ function createFarmland() {
 function createForests() {
   if (!GEN.forests.length) return;
   ensureVegAssets();
-  const MAX = 30000;
+  const MAX = 110000;
   const spots = [];
   const logSpots = [];
   for (const f of GEN.forests) {
     const rng = mulberry32(f.seed);
-    const want = Math.min(4200, Math.round((Math.PI * f.a * f.b) / 72));
+    const want = Math.min(12000, Math.round((Math.PI * f.a * f.b) / 30));
     for (let k = 0; k < want * 5 && spots.length < MAX; k++) {
       const lx = (rng() * 2 - 1) * f.a * 1.15;
       const lz = (rng() * 2 - 1) * f.b * 1.12;
@@ -7145,8 +7549,8 @@ function createForests() {
     }
 
     /* 倒木、断桩和岩石补足林下层次，也让林缘不像整片“树桩阵列”。 */
-    const logs = 4 + ((rng() * 7) | 0);
-    for (let k = 0; k < logs * 5 && logSpots.length < 230; k++) {
+    const logs = 8 + ((rng() * 10) | 0);
+    for (let k = 0; k < logs * 6 && logSpots.length < 420; k++) {
       const lx = (rng() * 2 - 1) * f.a * 0.92;
       const lz = (rng() * 2 - 1) * f.b * 0.86;
       const x = f.x + lx * f.cr - lz * f.sr;
@@ -7166,12 +7570,12 @@ function createForests() {
   worldTrees.push(treeGroup);
 
   /* 林下灌木：补足林地的厚度，但保持低矮，不遮挡树冠轮廓。 */
-  const bn = Math.ceil(spots.length / 3);
+  const bn = spots.length;
   const bushes = new THREE.InstancedMesh(vegAssets.bushGeo, vegAssets.bushMat, bn);
   bushes.frustumCulled = false;
   const dummy = new THREE.Object3D();
   let bi = 0;
-  for (let i = 0; i < spots.length && bi < bn; i += 3) {
+  for (let i = 0; i < spots.length && bi < bn; i++) {
     const p = spots[i];
     const bx = p.x + Math.cos(i * 1.7) * (2.5 + (i % 5) * 1.4);
     const bz = p.z + Math.sin(i * 2.3) * (2.5 + (i % 7) * 1.2);
@@ -7229,7 +7633,7 @@ function createMeadows() {
     const rng = mulberry32(md.seed);
 
     /* 少量树丛 + 孤立树，形成牧场、草甸和牧草地的疏林边界。 */
-    for (let gi = 0, made = 0; gi < 36 && made < 9; gi++) {
+    for (let gi = 0, made = 0; gi < 66 && made < 18; gi++) {
       const x = md.x + (rng() * 2 - 1) * md.a * 0.82;
       const z = md.z + (rng() * 2 - 1) * md.b * 0.82;
       if (meadowCoverage(md, x, z) < 0.18 || !validPoint(x, z)) continue;
@@ -7247,7 +7651,7 @@ function createMeadows() {
       }
       made++;
     }
-    for (let k = 0, made = 0; k < 56 && made < 24; k++) {
+    for (let k = 0, made = 0; k < 108 && made < 48; k++) {
       const x = md.x + (rng() * 2 - 1) * md.a;
       const z = md.z + (rng() * 2 - 1) * md.b;
       if (meadowCoverage(md, x, z) < 0.16 || !validPoint(x, z)) continue;
@@ -7259,7 +7663,7 @@ function createMeadows() {
       made++;
     }
 
-    for (let k = 0, made = 0; k < 165 && made < 70; k++) {
+    for (let k = 0, made = 0; k < 480 && made < 240; k++) {
       const x = md.x + (rng() * 2 - 1) * md.a;
       const z = md.z + (rng() * 2 - 1) * md.b;
       if (meadowCoverage(md, x, z) < 0.10 || !validPoint(x, z)) continue;
@@ -7315,6 +7719,81 @@ function createMeadows() {
     scene.add(hays);
     worldScenery.push(hays);
   }
+}
+
+/* 低层植物：草簇、蕨类和野花独立成批，补足近地层次的体积感。 */
+function createGroundPlants() {
+  ensureVegAssets();
+  const COUNT = 200000;
+  const rng = mulberry32((GEN.seed ^ 0xB411) >>> 0);
+  const grassSpots = [], fernSpots = [], flowerSpots = [];
+  let tries = 0, total = 0;
+  while (total < COUNT && tries < COUNT * 8) {
+    tries++;
+    const x = (rng() * 2 - 1) * (WORLD_HALF - 100);
+    const z = (rng() * 2 - 1) * (WORLD_HALF - 100);
+    const h = terrainHeight(x, z);
+    if (h < WATER_LEVEL + 2.2 || h > 420) continue;
+    let inCity = false;
+    for (const ct of GEN.cities) {
+      if (Math.hypot((x - ct.x) / ct.rx, (z - ct.z) / ct.rz) < 1.03) {
+        inCity = true;
+        break;
+      }
+    }
+    if (inCity || roadAt(GEN, x, z) > 0.04 || insideVillage(x, z, 1.02) ||
+        insideFarmstead(x, z, 1.35) || insideField(x, z, 1.0) ||
+        railNear(GEN, x, z, 16)) continue;
+    const patch = fbm(x * 0.0018, z * 0.0018, GEN.seed ^ 0x9F12, 3);
+    if (rng() > 0.40 + 0.95 * patch) continue;
+    const p = {
+      x, z, h,
+      s: 1.00 + rng() * 1.90,
+      rot: rng() * 6.2832
+    };
+    const roll = rng();
+    if (roll < 0.12) flowerSpots.push(p);
+    else if (roll < 0.38) fernSpots.push(p);
+    else grassSpots.push(p);
+    total++;
+  }
+
+  const addBatch = (spots, geo, mat, style) => {
+    if (!spots.length) return;
+    const mesh = new THREE.InstancedMesh(geo, mat, spots.length);
+    mesh.frustumCulled = false;
+    mesh.receiveShadow = true;
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < spots.length; i++) {
+      const p = spots[i];
+      dummy.position.set(p.x, p.h - 0.06, p.z);
+      dummy.rotation.set(0, p.rot + (i % 3) * 0.8, 0);
+      if (style === 'grass') {
+        dummy.scale.set(
+          p.s * (0.78 + (i % 5) * 0.06),
+          p.s * (0.92 + (i % 4) * 0.13),
+          p.s * (0.78 + (i % 3) * 0.09)
+        );
+      } else if (style === 'fern') {
+        dummy.scale.set(
+          p.s * (0.94 + (i % 4) * 0.08),
+          p.s * (0.74 + (i % 5) * 0.10),
+          p.s * (0.94 + (i % 3) * 0.10)
+        );
+      } else {
+        dummy.scale.set(p.s * 0.72, p.s * 1.08, p.s * 0.72);
+      }
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    worldTrees.push(mesh);
+  };
+
+  addBatch(grassSpots, vegAssets.grassGeo, vegAssets.grassMat, 'grass');
+  addBatch(fernSpots, vegAssets.fernGeo, vegAssets.fernMat, 'fern');
+  addBatch(flowerSpots, vegAssets.flowerGeo, vegAssets.flowerMat, 'flower');
 }
 
 /* 零散巨石：一次 draw call，给山地与荒地补上实体 */
@@ -8104,6 +8583,8 @@ function* buildWorldSteps() {
   createForests();
   yield 'meadowMesh';
   createMeadows();
+  yield 'groundPlantMesh';
+  createGroundPlants();
   yield 'rockMesh';
   createRocks();
   yield 'cloudMesh';
@@ -11355,7 +11836,7 @@ function curSpeed() {
 }
 
 /* =========================================================
-   视角锁定（R）：锁定面向屏幕中心最近的单位；锁定后相机改为
+   视角锁定（R）：锁定面向屏幕中心最近的敌方单位；锁定后相机改为
    “目标视线稳定系”——与机身姿态（WASD 滚转 / 俯仰 / 偏航）完全解耦：
    相机取在机身沿目标方向后方 30、稳定系上方 9.5（不引用任何机身姿态向量），
    视线每帧精确注视目标；机身位移仍带动相机平滑跟拍。再按 R 解除。
@@ -11374,7 +11855,7 @@ function lockUnitPos(L, out) {
 function findLockTarget() {
   _u1.set(0, 0, -1).applyQuaternion(camera.quaternion);   // 相机前向
   let best = null, bestD = 1e9;
-  const consider = (unit, up, kind, label, hostile) => {
+  const consider = (unit, up, kind, label) => {
     if (!unit || unit.dead) return;
     _u2.copy(unit.mesh.position);
     _u2.y += up;
@@ -11385,13 +11866,12 @@ function findLockTarget() {
     const d = Math.hypot(_u3.x, _u3.y);
     if (d < bestD) {
       bestD = d;
-      best = { u: unit, up, kind, label, hostile: !!hostile };
+      best = { u: unit, up, kind, label, hostile: true };
     }
   };
-  for (const e of enemies) consider(e, 0, 'enemy', '敌机', true);
-  for (const w of wingmen) consider(w, 0, 'wingman', '友机', false);
-  for (const g of aaaGuns) consider(g, 5, 'aaa', '防空车', true);
-  for (const s of samSites) consider(s, 16, 'sam', '导弹阵地', true);
+  for (const e of enemies) consider(e, 0, 'enemy', '敌机');
+  for (const g of aaaGuns) consider(g, 5, 'aaa', '防空车');
+  for (const s of samSites) consider(s, 16, 'sam', '导弹阵地');
   return best;
 }
 
@@ -11689,18 +12169,186 @@ function updateCrash(dt) {
 const hudScore     = document.getElementById('hudScore');
 const hudDestroyed = document.getElementById('hudDestroyed');
 const hudAlt       = document.getElementById('hudAlt');
-const missileHud   = document.getElementById('missileHud');
-const hudMissile   = document.getElementById('hudMissile');
-const hudMissileStatus = document.getElementById('hudMissileStatus');
+const hudAircraftName = document.getElementById('hudAircraftName');
+const hudAircraftCode = document.getElementById('hudAircraftCode');
+const hudAircraftRole = document.getElementById('hudAircraftRole');
+const hudHpValue   = document.getElementById('hudHpValue');
+const hudHpMax     = document.getElementById('hudHpMax');
+const hudThrottle = document.getElementById('hudThrottle');
+const hudEnemyCount = document.getElementById('hudEnemyCount');
+const engineGraphic = document.getElementById('engineGraphic');
+const enginePowerFill = document.getElementById('enginePowerFill');
+const engineFan = engineGraphic && engineGraphic.querySelector
+  ? engineGraphic.querySelector('.engine-fan') : null;
+const engineFlame = engineGraphic && engineGraphic.querySelector
+  ? engineGraphic.querySelector('.engine-flame') : null;
 const hpFill       = document.getElementById('hpFill');
 const dmgFlash     = document.getElementById('dmgFlash');
+const weaponGunEl = document.getElementById('weaponGun');
+const weaponBombEl = document.getElementById('weaponBomb');
+const weaponMissileEl = document.getElementById('weaponMissile');
+const weaponGunState = document.getElementById('weaponGunState');
+const weaponGunAmmo = document.getElementById('weaponGunAmmo');
+const weaponBombState = document.getElementById('weaponBombState');
+const weaponBombAmmo = document.getElementById('weaponBombAmmo');
+const weaponMissileState = document.getElementById('weaponMissileState');
+const weaponMissileAmmo = document.getElementById('weaponMissileAmmo');
+const radarCanvas = document.getElementById('radarCanvas');
+const radarCtx = radarCanvas ? radarCanvas.getContext('2d') : null;
+const RADAR_RANGE = 4200;
 let lastScore = -1, lastDestroyed = -1, lastAlt = -1, lastHp = -1;
-let lastMissileAmmo = -1, lastMissileStatus = '';
+let lastEnemyCount = -1, lastAircraftId = '';
+let lastEngineMode = '', lastThrottleValue = -1;
+let lastRadarTime = -999, radarSweep = -Math.PI * 0.5;
+
+function setWeaponCard(card, stateEl, ammoEl, options) {
+  if (!card) return;
+  card.classList.toggle('active', !!options.active);
+  card.classList.toggle('reload', !!options.reload);
+  card.classList.toggle('empty', !!options.empty);
+  card.classList.toggle('unavailable', !!options.unavailable);
+  if (stateEl && stateEl.textContent !== options.state) stateEl.textContent = options.state;
+  if (ammoEl && ammoEl.textContent !== options.ammo) ammoEl.textContent = options.ammo;
+}
+
+function updateRadar(now) {
+  if (!radarCtx || now - lastRadarTime < 45) return;
+  lastRadarTime = now;
+  radarSweep += 0.16;
+
+  const w = radarCanvas.width, h = radarCanvas.height;
+  const cx = w * 0.5, cy = h * 0.5;
+  const radius = Math.min(w, h) * 0.445;
+  const ctx = radarCtx;
+  ctx.clearRect(0, 0, w, h);
+
+  const bg = ctx.createRadialGradient
+    ? ctx.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius)
+    : null;
+  if (bg && bg.addColorStop) {
+    bg.addColorStop(0, 'rgba(27,64,80,.28)');
+    bg.addColorStop(0.64, 'rgba(9,31,45,.38)');
+    bg.addColorStop(1, 'rgba(4,16,26,.54)');
+    ctx.fillStyle = bg;
+  } else {
+    ctx.fillStyle = 'rgba(8,28,42,.44)';
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(145,194,207,.38)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 0.5, 0, Math.PI * 2);
+  ctx.clip();
+  if (ctx.setLineDash) ctx.setLineDash([2, 5]);
+  for (let ring = 1; ring <= 3; ring++) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * ring / 3, 0, Math.PI * 2);
+    ctx.strokeStyle = ring === 3 ? 'rgba(127,170,185,.26)' : 'rgba(127,170,185,.14)';
+    ctx.stroke();
+  }
+  if (ctx.setLineDash) ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy);
+  ctx.moveTo(cx, cy - radius); ctx.lineTo(cx, cy + radius);
+  ctx.strokeStyle = 'rgba(127,170,185,.13)';
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, radius, radarSweep - 0.64, radarSweep);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(108,180,199,.075)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(radarSweep) * radius, cy + Math.sin(radarSweep) * radius);
+  ctx.strokeStyle = 'rgba(171,224,235,.42)';
+  ctx.stroke();
+  ctx.restore();
+
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(plane.quaternion);
+  forward.y = 0;
+  if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
+  forward.normalize();
+  const rightX = -forward.z, rightZ = forward.x;
+
+  const drawContact = (unit, kind) => {
+    const px = unit.mesh ? unit.mesh.position.x : unit.x;
+    const pz = unit.mesh ? unit.mesh.position.z : unit.z;
+    const dx = px - plane.position.x, dz = pz - plane.position.z;
+    const rawDist = Math.hypot(dx, dz);
+    if (rawDist < 0.001) return;
+    const localX = dx * rightX + dz * rightZ;
+    const localZ = dx * forward.x + dz * forward.z;
+    const scale = Math.min(radius * 0.94 / RADAR_RANGE, (radius * 0.94) / rawDist);
+    const x = cx + localX * scale;
+    const y = cy - localZ * scale;
+    const edge = rawDist > RADAR_RANGE;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = edge ? 0.34 : 0.94;
+    if (kind === 'enemy') {
+      ctx.rotate(Math.PI);
+      ctx.beginPath();
+      ctx.moveTo(0, -4.8); ctx.lineTo(4.2, 4); ctx.lineTo(0, 2.4); ctx.lineTo(-4.2, 4);
+      ctx.closePath();
+      ctx.fillStyle = '#b87978';
+      ctx.fill();
+    } else if (kind === 'wingman') {
+      ctx.beginPath();
+      ctx.moveTo(0, -4.6); ctx.lineTo(4, 3.4); ctx.lineTo(0, 1.8); ctx.lineTo(-4, 3.4);
+      ctx.closePath();
+      ctx.fillStyle = '#75b8cf';
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.rect(-2.9, -2.9, 5.8, 5.8);
+      ctx.fillStyle = 'rgba(195,170,118,.28)';
+      ctx.fill();
+      ctx.strokeStyle = '#c3aa76';
+      ctx.stroke();
+    }
+    if (G.lockTarget && G.lockTarget.u === unit) {
+      const pulse = 8.5 + Math.sin(now * 0.012) * 1.5;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#df7070';
+      ctx.lineWidth = 1.6;
+      ctx.strokeRect(-pulse, -pulse, pulse * 2, pulse * 2);
+      ctx.strokeStyle = 'rgba(223,112,112,.42)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(-pulse - 2, -pulse - 2, (pulse + 2) * 2, (pulse + 2) * 2);
+    }
+    ctx.restore();
+  };
+
+  for (const e of enemies) if (!e.dead) drawContact(e, 'enemy');
+  for (const wg of wingmen) if (!wg.dead) drawContact(wg, 'wingman');
+  for (const g of aaaGuns) if (!g.dead) drawContact(g, 'ground');
+  for (const s of samSites) if (!s.dead) drawContact(s, 'ground');
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.beginPath();
+  ctx.moveTo(0, -7);
+  ctx.lineTo(5, 5);
+  ctx.lineTo(0, 2.5);
+  ctx.lineTo(-5, 5);
+  ctx.closePath();
+  ctx.fillStyle = '#d8ebef';
+  ctx.fill();
+  ctx.restore();
+
+}
 
 function updateHUD() {
   const gh = terrainHeight(plane.position.x, plane.position.z);
   const alt = Math.max(0, Math.round(plane.position.y - gh));
-  if (alt !== lastAlt) { hudAlt.textContent = alt + 'm'; lastAlt = alt; }
+  if (alt !== lastAlt) { hudAlt.textContent = alt; lastAlt = alt; }
   if (G.score !== lastScore) { hudScore.textContent = G.score; lastScore = G.score; }
   if (G.destroyed !== lastDestroyed) {
     hudDestroyed.textContent = G.destroyed; lastDestroyed = G.destroyed;
@@ -11708,36 +12356,73 @@ function updateHUD() {
   const hpPct = Math.max(0, G.hp / G.hpMax);
   if (hpPct !== lastHp) {
     hpFill.style.width = (hpPct * 100).toFixed(1) + '%';
-    hpFill.style.background = hpPct > 0.6 ? '#ff686e' : (hpPct > 0.3 ? '#d94249' : '#941d27');
+    hpFill.style.background = hpPct > 0.6 ? '#78aeb4' : (hpPct > 0.3 ? '#b7a378' : '#b87978');
+    if (hudHpValue) hudHpValue.textContent = Math.max(0, G.hp);
     lastHp = hpPct;
   }
+  if (hudHpMax) hudHpMax.textContent = G.hpMax;
   dmgFlash.style.opacity = G.hitFlash;
 
   const spec = selectedAircraftSpec();
   const hasPL = spec.plMissiles > 0;
-  if (missileHud) missileHud.hidden = !hasPL;
-  if (hasPL) {
-    if (hudMissile && G.missileAmmo !== lastMissileAmmo) {
-      hudMissile.textContent = G.missileAmmo;
-      lastMissileAmmo = G.missileAmmo;
-    }
-    let status = 'R 锁定 · 右键发射';
-    const reloadStatus = '补弹 ' +
-      Math.max(1, Math.ceil(PL_REPLENISH_INTERVAL - G.missileReloadTimer)) + 's';
-    if (G.missileCooldown > 0) status = '装填 ' + G.missileCooldown.toFixed(1) + 's';
-    else if (G.missileAmmo <= 0) status = reloadStatus;
-    else if (G.lockTarget && !G.lockTarget.u.dead) {
-      status = G.lockTarget.hostile
-        ? '已锁定 ' + (G.lockTarget.label || '敌方目标')
-        : '友军 · 不可发射';
-    } else if (G.missileAmmo < (spec.plMissiles || 0)) status = reloadStatus;
-    if (hudMissileStatus && status !== lastMissileStatus) {
-      hudMissileStatus.textContent = status;
-      hudMissileStatus.style.color = G.lockTarget && G.lockTarget.hostile
-        ? '#9fefff' : 'rgba(184,232,244,.72)';
-      lastMissileStatus = status;
-    }
+  if (lastAircraftId !== spec.id) {
+    lastAircraftId = spec.id;
+    hudAircraftName.textContent = spec.name;
+    hudAircraftCode.textContent = spec.code;
+    hudAircraftRole.textContent = spec.role;
   }
+  weaponBombEl.hidden = hasPL;
+  weaponMissileEl.hidden = !hasPL;
+
+  const gunActive = !!(keys.fire && G.started && !G.over && !G.crashing);
+  const bombActive = !!(G.aiming && !hasPL && G.started && !G.over && !G.crashing);
+  const missileReloading = hasPL && G.missileCooldown > 0;
+  const missileEmpty = hasPL && G.missileAmmo <= 0;
+  setWeaponCard(weaponGunEl, weaponGunState, weaponGunAmmo, {
+    active: gunActive, reload: false, empty: false, unavailable: false,
+    state: gunActive ? 'FIRING' : 'STANDBY', ammo: '∞'
+  });
+  setWeaponCard(weaponBombEl, weaponBombState, weaponBombAmmo, {
+    active: bombActive, reload: false, empty: false, unavailable: hasPL,
+    state: bombActive ? 'AIMING' : 'STANDBY', ammo: '∞'
+  });
+  setWeaponCard(weaponMissileEl, weaponMissileState, weaponMissileAmmo, {
+    active: missileReloading, reload: missileReloading && !missileEmpty, empty: missileEmpty,
+    unavailable: !hasPL,
+    state: missileEmpty ? 'EMPTY' : (missileReloading ? 'RELOAD' : (G.lockTarget && G.lockTarget.hostile ? 'LOCKED' : 'STANDBY')),
+    ammo: hasPL ? String(G.missileAmmo) : '0'
+  });
+
+  const throttle = Math.round(G.thrust * 100);
+  if (throttle !== lastThrottleValue) {
+    hudThrottle.textContent = throttle;
+    if (enginePowerFill) {
+      enginePowerFill.style.width = throttle + '%';
+      enginePowerFill.style.opacity = G.engCut ? '.34' : '.68';
+    }
+    lastThrottleValue = throttle;
+  }
+  const engineMode = G.engCut ? 'cut' : (keys.boost ? 'boost' : (G.thrust < 0.98 ? 'recover' : ''));
+  if (engineMode !== lastEngineMode) {
+    engineGraphic.setAttribute('class', 'engine-graphic' + (engineMode ? ' ' + engineMode : ''));
+    lastEngineMode = engineMode;
+  }
+  if (engineFan) {
+    const rpm = Math.max(0.18, G.thrust * (keys.boost ? 2.15 : 1));
+    engineFan.style.animationDuration = (0.95 / rpm).toFixed(2) + 's';
+  }
+  if (engineFlame) {
+    engineFlame.style.opacity = G.engCut ? '0' : String(0.24 + G.thrust * 0.76);
+    engineFlame.style.transform = 'scaleX(' + (0.34 + G.thrust * 0.96) + ')';
+  }
+
+  const enemyCount = enemies.reduce((n, e) => n + (e.dead ? 0 : 1), 0);
+  if (enemyCount !== lastEnemyCount) {
+    hudEnemyCount.textContent = String(enemyCount).padStart(2, '0');
+    hudEnemyCount.className = enemyCount > 0 ? 'danger' : '';
+    lastEnemyCount = enemyCount;
+  }
+  updateRadar(performance.now());
 }
 
 /* =========================================================
@@ -11858,8 +12543,12 @@ function startGame() {
   lockMarkEl.style.display = 'none';
   gunReticle.visible = false;
   weaponNoticeTimer = 0;
-  lastMissileAmmo = -1;
-  lastMissileStatus = '';
+  lastScore = lastDestroyed = lastAlt = lastHp = -1;
+  lastEnemyCount = -1;
+  lastAircraftId = '';
+  lastEngineMode = '';
+  lastThrottleValue = -1;
+  lastRadarTime = -999;
   const weaponWarnEl = document.getElementById('weaponWarn');
   if (weaponWarnEl) weaponWarnEl.className = '';
 
@@ -12012,6 +12701,7 @@ const WORLD_STAGE_SPECS = [
   { key:'vegetationMesh', label:'生成植被' },
   { key:'forestMesh', label:'生成森林模型' },
   { key:'meadowMesh', label:'布置草甸牧场' },
+  { key:'groundPlantMesh', label:'铺展低层植物' },
   { key:'rockMesh', label:'添加岩石模型' },
   { key:'cloudMesh', label:'生成云层' },
   { key:'cityMesh', label:'建造城市' },
@@ -12919,6 +13609,7 @@ function update(dt) {
   if (worldWater && worldWater.material.uniforms) {
     worldWater.material.uniforms.uTime.value += dt;
   }
+  updateClouds(dt);
   for (const t of windTurbines) t.rotor.rotation.z += t.speed * dt;
   updateRailTrains(dt);
 

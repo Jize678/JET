@@ -52,11 +52,6 @@
   #weaponWarn.show{opacity:1;transform:translate(-50%,0)}
   #weaponWarn.ready{border-color:rgba(111,222,243,.58);color:#c9f7ff}
   #grade{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;transition:opacity .45s ease}
-  #grade.golden{opacity:1;background:
-           radial-gradient(ellipse at 52% 43%,rgba(255,205,122,0) 32%,rgba(88,30,8,.08) 70%,rgba(18,8,5,.34) 100%)}
-  #grade.golden::after{content:'';position:absolute;inset:0;
-           background:radial-gradient(ellipse at 76% 18%,rgba(255,211,129,.11),transparent 38%);
-           mix-blend-mode:screen}
   #grade.war{opacity:1;background:
            radial-gradient(ellipse at 50% 44%,rgba(106,121,126,0) 26%,rgba(30,42,45,.13) 68%,rgba(6,12,14,.46) 100%)}
   #grade.war::after{content:'';position:absolute;inset:0;opacity:.16;
@@ -228,7 +223,7 @@
   .deploy-actions .btn-secondary{min-height:37px;font-size:10px}
   .lighting-block{margin-top:13px;padding-top:12px;border-top:1px solid rgba(255,112,116,.12)}
   .lighting-block .setup-card-head{margin-bottom:9px}
-  .lighting-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .lighting-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
   .lighting-option{min-height:38px;padding:7px 5px;border-radius:9px;cursor:pointer;
            border:1px solid rgba(255,112,116,.20);background:#35151a;color:#cfa5a4;
            font-size:9px;line-height:1.3;letter-spacing:.02em;transition:background .16s,border-color .16s,color .16s}
@@ -497,7 +492,7 @@ const G = {
   score:0, destroyed:0, fireTimer:0, shake:0, bulletSide:1,
   aiming:false, menuOpen:false, boost:0, cursorHidden:false,
   hp:32, hpMax:32, invuln:0, hitFlash:0,
-  thrust:1, lockTarget: null, engCut: false, lightMode:'golden',
+  thrust:1, lockTarget: null, engCut: false, lightMode:'war',
   missileAmmo:0, missileCooldown:0, missileReloadTimer:0
 };
 
@@ -530,26 +525,18 @@ const LIGHT_PRESETS = {
     label: '无光影', toneMapping: THREE.NoToneMapping, outputEncoding: THREE.LinearEncoding,
     exposure: 1.0, hemiSky: 0xc7dde8, hemiGround: 0x414b38, hemiI: 0.58,
     sun: 0xffdb9f, sunI: 1.02, fill: 0x789fc2, fillI: 0.12, shadows: false,
+    contactShadows: false,
     shadowOffset: [1100, 1550, 760], shadowCam: 620, shadowMap: 2048,
     fog: 0xa9c0c7, fogNear: 11000, fogFar: 22000,
     skyTop: 0x245e96, skyMid: 0x6da6c7, skyBottom: 0xb6ced2,
     sunDir: [0.55, 0.48, 0.38], sunColor: 0xffe0a4, cloud: 0xf1f6f7,
     grade: '', filter: 'none'
   },
-  golden: {
-    label: '黄金斜阳', toneMapping: THREE.ACESFilmicToneMapping, outputEncoding: THREE.sRGBEncoding,
-    exposure: 0.82, hemiSky: 0x8ebdd5, hemiGround: 0x40301f, hemiI: 0.34,
-    sun: 0xffb45e, sunI: 1.06, fill: 0x6e93b4, fillI: 0.09, shadows: true,
-    shadowOffset: [1180, 720, 640], shadowCam: 980, shadowMap: 2048,
-    fog: 0xc5b69e, fogNear: 4200, fogFar: 18500,
-    skyTop: 0x244e82, skyMid: 0x84a5b6, skyBottom: 0xe8bd86,
-    sunDir: [0.72, 0.22, 0.46], sunColor: 0xffbd72, cloud: 0xf4dcc0,
-    grade: 'golden', filter: 'saturate(1.18) contrast(1.12) brightness(.96)'
-  },
   war: {
     label: '阴天战争', toneMapping: THREE.ACESFilmicToneMapping, outputEncoding: THREE.sRGBEncoding,
     exposure: 0.72, hemiSky: 0xaebdc2, hemiGround: 0x343b38, hemiI: 0.60,
-    sun: 0xc6d0cf, sunI: 0.38, fill: 0x687b84, fillI: 0.20, shadows: true,
+    sun: 0xc6d0cf, sunI: 0.38, fill: 0x687b84, fillI: 0.20, shadows: false,
+    contactShadows: false,
     shadowOffset: [860, 1150, 680], shadowCam: 860, shadowMap: 2048,
     fog: 0x8d999d, fogNear: 2600, fogFar: 15500,
     skyTop: 0x2e3d45, skyMid: 0x5d6e73, skyBottom: 0x8f9795,
@@ -4515,22 +4502,32 @@ const worldClouds = [];
 function createClouds() {
   if (!cloudAssets) {
     cloudAssets = {
-      geo: new THREE.SphereGeometry(1, 8, 6),
-      mat: new THREE.MeshBasicMaterial({ color: 0xf1f6f7, transparent: true, opacity: 0.62, depthWrite: false })
+      geo: new THREE.SphereGeometry(1, 10, 7),
+      mat: new THREE.MeshBasicMaterial({
+        color: 0xf1f6f7, transparent: true, opacity: 0.62,
+        depthWrite: false, depthTest: true
+      })
     };
   }
   const rng = mulberry32((GEN.seed ^ 0xC10D) >>> 0);
   for (let i = 0; i < 44; i++) {
     const cl = new THREE.Group();
-    const n = 4 + (rng() * 5 | 0);
+    const n = 5 + (rng() * 4 | 0);
     for (let j = 0; j < n; j++) {
       const m = new THREE.Mesh(cloudAssets.geo, cloudAssets.mat);
-      m.position.set((rng() - 0.5) * 110, (rng() - 0.5) * 16, (rng() - 0.5) * 110);
-      m.scale.set(34 + rng() * 46, 10 + rng() * 15, 30 + rng() * 42);
+      const spread = j - (n - 1) * 0.5;
+      m.position.set(
+        spread * 19 + (rng() - 0.5) * 22,
+        (rng() - 0.35) * 18 + (j % 2) * 5,
+        (rng() - 0.5) * 74
+      );
+      m.scale.set(26 + rng() * 32, 16 + rng() * 18, 25 + rng() * 30);
+      m.userData.cloudPuff = true;
+      m.renderOrder = 3;
       cl.add(m);
     }
     cl.position.set((rng() - 0.5) * 8200, 400 + rng() * 560, (rng() - 0.5) * 8200);
-    cl.renderOrder = 2;
+    cl.renderOrder = 3;
     scene.add(cl);
     worldClouds.push(cl);
   }
@@ -4538,7 +4535,7 @@ function createClouds() {
 
 function applyLightingPreset(mode) {
   if (!renderer) return;
-  const key = LIGHT_PRESETS[mode] ? mode : 'golden';
+  const key = LIGHT_PRESETS[mode] ? mode : 'war';
   const p = LIGHT_PRESETS[key];
   const prevTone = renderer.toneMapping;
 
@@ -4572,9 +4569,9 @@ function applyLightingPreset(mode) {
     worldSun.shadow.camera.top = p.shadowCam;
     worldSun.shadow.camera.bottom = -p.shadowCam;
     worldSun.shadow.camera.near = 40;
-    worldSun.shadow.camera.far = key === 'war' ? 3200 : 3600;
-    worldSun.shadow.bias = key === 'war' ? -0.00022 : -0.00038;
-    worldSun.shadow.normalBias = key === 'war' ? 0.32 : 0.22;
+    worldSun.shadow.camera.far = 3200;
+    worldSun.shadow.bias = -0.00022;
+    worldSun.shadow.normalBias = 0.32;
     worldSun.shadow.camera.updateProjectionMatrix();
     SHADOW_SUN_OFFSET.set(p.shadowOffset[0], p.shadowOffset[1], p.shadowOffset[2]);
   }
@@ -4598,9 +4595,14 @@ function applyLightingPreset(mode) {
     wu.fogFar.value = p.fogFar;
   }
   if (cloudAssets) {
+    cloudAssets.mat.transparent = true;
+    cloudAssets.mat.depthWrite = false;
     cloudAssets.mat.color.setHex(p.cloud);
-    cloudAssets.mat.opacity = key === 'war' ? 0.74 : (key === 'golden' ? 0.68 : 0.62);
+    cloudAssets.mat.opacity = key === 'war' ? 0.74 : 0.62;
+    cloudAssets.mat.needsUpdate = true;
   }
+  if (aoGroup) aoGroup.visible = !!p.contactShadows;
+  if (vegAssets) vegAssets.shadowMat.opacity = p.contactShadows ? 0.48 : 0;
 
   if (scene && prevTone !== p.toneMapping) {
     scene.traverse(o => {
@@ -4676,6 +4678,8 @@ function addTreeCluster(spots, random, scope) {
     const trunks = new THREE.InstancedMesh(vegAssets.trunkGeo, vegAssets.trunkMat, list.length);
     const crowns = new THREE.InstancedMesh(st.geo, st.mat, list.length);
     trunks.frustumCulled = crowns.frustumCulled = false;
+    trunks.castShadow = crowns.castShadow = true;
+    trunks.receiveShadow = crowns.receiveShadow = true;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
       const s = p.s || 1;
@@ -5198,6 +5202,7 @@ function detBuild() {  if (!detBatch || !detBatch.pos.length) { detBatch = null;
     amesh.renderOrder = 3;
     aoGroup = new THREE.Group();
     aoGroup.add(amesh);
+    aoGroup.visible = !!(LIGHT_PRESETS[G.lightMode] && LIGHT_PRESETS[G.lightMode].contactShadows);
     scene.add(aoGroup);
   }
   aoBatch = null;
@@ -8484,6 +8489,7 @@ function createPlane() {
   g.userData.flameAnchorZ = 5.95;
   g.userData.flameBaseLength = 2.8;
   g.scale.setScalar(1.55);
+  enableEntityShadows(g);
   return g;
 }
 
@@ -8617,6 +8623,7 @@ function makePLMissileMesh(showFlame) {
   g.userData.flame = flame;
   g.userData.flameOuter = flameOuter;
   g.userData.flameGlow = flameGlow;
+  enableEntityShadows(g);
   return g;
 }
 
@@ -8947,6 +8954,40 @@ function createJ10Plane() {
   splitter.position.set(0, -0.25, -4.58);
   g.add(splitter);
 
+  /* 歼-10 双联机炮：位于进气道正下方偏左，炮口超出进气唇口。 */
+  const gunCenterX = -0.25;
+  const gunY = -1.34;
+  const gunMuzzles = [];
+  const gunPod = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.17, 0.21, 1.48, 10),
+    matPanel
+  );
+  gunPod.rotation.x = Math.PI / 2;
+  gunPod.position.set(gunCenterX, -1.27, -3.48);
+  g.add(gunPod);
+  for (const sx of [-1, 1]) {
+    const barrelX = gunCenterX + sx * 0.10;
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.042, 0.052, 1.18, 8),
+      matDark
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(barrelX, gunY, -4.34);
+    g.add(barrel);
+
+    const muzzleRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.061, 0.015, 5, 10),
+      matDark
+    );
+    muzzleRing.position.set(barrelX, gunY, -4.94);
+    g.add(muzzleRing);
+
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(barrelX, gunY, -5.02);
+    g.add(muzzle);
+    gunMuzzles.push(muzzle);
+  }
+
   /* 鸭翼与主翼都带独立前缘描边，翼根向后一直延伸到垂尾底边中点。 */
   const canardR = [
     [0.62, -4.15], [2.72, -2.90], [2.54, -2.38], [0.76, -2.76]
@@ -9162,7 +9203,10 @@ function createJ10Plane() {
   }
 
   g.userData.plMissileSlots = missileSlots;
+  g.userData.gunMuzzles = gunMuzzles;
+  g.userData.gunMuzzleIndex = 0;
   g.scale.setScalar(1.33);
+  enableEntityShadows(g);
   return g;
 }
 
@@ -9274,6 +9318,7 @@ function makeBombProto() {
   }
 
   g.scale.setScalar(1.65);
+  enableEntityShadows(g);
   return g;
 }
 
@@ -9377,19 +9422,30 @@ function fireBullet() {
   const side = new THREE.Vector3(1, 0, 0).applyQuaternion(plane.quaternion);
   const up   = new THREE.Vector3(0, 1, 0).applyQuaternion(plane.quaternion);
 
-  G.bulletSide = -G.bulletSide;
-
-  const pos = plane.position.clone()
-    .addScaledVector(fwd, 13)
-    .addScaledVector(side, G.bulletSide * 2.6)
-    .addScaledVector(up, -0.9);
+  let pos;
+  let lateralSpeed = 0;
+  const customMuzzles = plane.userData.gunMuzzles;
+  if (customMuzzles && customMuzzles.length) {
+    const muzzleIndex = plane.userData.gunMuzzleIndex || 0;
+    plane.updateMatrixWorld(true);
+    pos = new THREE.Vector3();
+    customMuzzles[muzzleIndex % customMuzzles.length].getWorldPosition(pos);
+    plane.userData.gunMuzzleIndex = (muzzleIndex + 1) % customMuzzles.length;
+  } else {
+    G.bulletSide = -G.bulletSide;
+    pos = plane.position.clone()
+      .addScaledVector(fwd, 13)
+      .addScaledVector(side, G.bulletSide * 2.6)
+      .addScaledVector(up, -0.9);
+    lateralSpeed = G.bulletSide * 0.5;
+  }
 
   const m = new THREE.Mesh(BULLET_GEO, BULLET_MAT);
   m.position.copy(pos);
   m.quaternion.copy(plane.quaternion);
   scene.add(m);
 
-  const vel = fwd.clone().multiplyScalar(CFG.bulletSpd).addScaledVector(side, G.bulletSide * 0.5);
+  const vel = fwd.clone().multiplyScalar(CFG.bulletSpd).addScaledVector(side, lateralSpeed);
 
   bullets.push({ mesh: m, vel: vel, age: 0 });
 
@@ -9635,6 +9691,24 @@ function orientToward(obj, dir, bank) {
   obj.quaternion.setFromRotationMatrix(_oM);
 }
 
+function enableEntityShadows(root) {
+  if (!root) return;
+  root.traverse(object => {
+    if (!object.isMesh || !object.material) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    let castable = false, receives = false;
+    for (const material of materials) {
+      if (!material || material.visible === false) continue;
+      if (material.blending !== THREE.AdditiveBlending && material.depthWrite !== false) {
+        castable = true;
+      }
+      if (!material.transparent || material.opacity >= 0.75) receives = true;
+    }
+    if (castable) object.castShadow = true;
+    if (receives) object.receiveShadow = true;
+  });
+}
+
 /* ---- 防空机枪：通古斯卡式履带防空车（炮塔两侧双管机炮）+ 营地小房子 ---- */
 function createAAAGun(x, z) {
   const groundY = terrainHeight(x, z);
@@ -9715,6 +9789,7 @@ function createAAAGun(x, z) {
   });
 
   g.scale.setScalar(AAA_SCALE);
+  enableEntityShadows(g);
   scene.add(g);
 
   return {
@@ -9743,6 +9818,7 @@ function makeMissileMesh() {
     fin.rotation.z = a;
     g.add(fin);
   }
+  enableEntityShadows(g);
   return g;
 }
 
@@ -9852,6 +9928,7 @@ function createSAM(x, z) {
   });
 
   g.scale.setScalar(SAM_SCALE);
+  enableEntityShadows(g);
   scene.add(g);
 
   return {
@@ -9915,6 +9992,7 @@ function createEnemyPlane() {
   g.userData.flame = flame;
 
   g.scale.setScalar(1.3);
+  enableEntityShadows(g);
   return g;
 }
 
@@ -10558,6 +10636,7 @@ function createWingmanPlane() {
   g.userData.flame = flame;
 
   g.scale.setScalar(1.35);
+  enableEntityShadows(g);
   return g;
 }
 
@@ -11666,9 +11745,14 @@ function updateHUD() {
 ========================================================= */
 function updateSunShadow(force) {
   if (!worldSun || !plane) return;
-  const tx = plane.position.x;
-  const ty = plane.position.y - 260;
-  const tz = plane.position.z;
+  const groundY = Math.max(terrainHeight(plane.position.x, plane.position.z), WATER_LEVEL);
+  const altitude = Math.max(0, plane.position.y - groundY);
+  const sunY = Math.max(100, SHADOW_SUN_OFFSET.y);
+  const shadowX = plane.position.x - SHADOW_SUN_OFFSET.x * altitude / sunY;
+  const shadowZ = plane.position.z - SHADOW_SUN_OFFSET.z * altitude / sunY;
+  const tx = (plane.position.x + shadowX) * 0.5;
+  const ty = (plane.position.y + groundY) * 0.5;
+  const tz = (plane.position.z + shadowZ) * 0.5;
   const dx = tx - _shadowAnchor.x;
   const dy = ty - _shadowAnchor.y;
   const dz = tz - _shadowAnchor.z;
@@ -11883,7 +11967,7 @@ function resumeGameFromMenu() {
    开局地图生成 UI（种子 → 2D 预览 → 地面单位布点）
 ========================================================= */
 let PLAN = { aaa: [], sam: [] };
-let selectedLightMode = 'golden';
+let selectedLightMode = 'war';
 let currentSeed = '';
 let previewBase = null;
 let dragState = null;
@@ -12728,7 +12812,6 @@ function showSetupScreen() {
               '<div class="setup-card-head"><h3>战场光影</h3><span>开始任务时生效</span></div>' +
               '<div class="lighting-grid" id="lightingPicker">' +
                 '<button class="lighting-option" data-light="none" type="button">无光影</button>' +
-                '<button class="lighting-option" data-light="golden" type="button">黄金斜阳</button>' +
                 '<button class="lighting-option" data-light="war" type="button">低饱和阴天</button>' +
               '</div>' +
             '</div>' +
